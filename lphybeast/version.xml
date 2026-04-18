@@ -1,4 +1,4 @@
-<package name='lphybeast' version='2.0.0'>
+<package name='lphybeast' version='1.4.0'>
     <depends on='BEAST.base' atleast='2.7.8'/>
     <depends on='BEAST.app' atleast='2.7.8'/>
 
