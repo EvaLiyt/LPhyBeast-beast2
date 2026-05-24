@@ -308,6 +308,34 @@ public class BEASTContext {
         throw new RuntimeException("No coercible RealVector found for " + value + " (got " + obj.getClass().getSimpleName() + ")");
     }
 
+    /**
+     * returns a spec Tensor for this value, accepting sepc RealScalar and sepc RealVector, coercing from Int params if needed.
+     */
+    public beast.base.spec.type.Tensor<? extends beast.base.spec.domain.Real, Double> getAsRealTensor(Value value) {
+        Object obj = beastObjects.get(value);
+        if (obj instanceof beast.base.spec.type.RealScalar<?> rs) return rs;
+        if (obj instanceof beast.base.spec.type.RealVector<?> rv) return rv;
+        if (obj instanceof beast.base.spec.inference.parameter.IntScalarParam<?> isp) {
+            var scalar = new beast.base.spec.inference.parameter.RealScalarParam<>(
+                    (double) isp.get(), beast.base.spec.domain.Real.INSTANCE);
+            scalar.setID(isp.getID());
+            removeBEASTObject((BEASTInterface) isp);
+            addToContext(value, scalar);
+            return scalar;
+        }
+        if (obj instanceof beast.base.spec.inference.parameter.IntVectorParam ivp) {
+            double[] values = new double[ivp.size()];
+            for (int i = 0; i < values.length; i++) values[i] = ivp.get(i);
+            var vec = new beast.base.spec.inference.parameter.RealVectorParam<>(values, beast.base.spec.domain.Real.INSTANCE);
+            vec.setID(ivp.getID());
+            vec.setInputValue("estimate", false);
+            removeBEASTObject(ivp);
+            addToContext(value, vec);
+            return vec;
+        }
+        throw new RuntimeException("No coercible RealTensor found for " + value + " (got " + obj.getClass().getSimpleName() + ")");
+    }
+
     //*** handle BEAST 2 objects ***//
 
     /**
