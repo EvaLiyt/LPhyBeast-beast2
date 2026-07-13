@@ -1,0 +1,22 @@
+<itsabeastystatewerein version='2.0' sample='5000'>
+<statenode id='SkylineM.A_to_B'>SkylineM.A_to_B{2, }: 1.3445191456346999 0.1405694256330398 </statenode>
+<statenode id='SkylineM.B_to_A'>SkylineM.B_to_A{2, }: -0.32151906213607395 -1.453751681389097 </statenode>
+<statenode id='SkylineNe.A'>SkylineNe.A{4, }: -1.6883599761859946 -2.1974072659235064 -0.6216206372282934 -1.605339783017762 </statenode>
+<statenode id='SkylineNe.B'>SkylineNe.B{4, }: 0.06628873965102292 -0.7269394033230931 1.1555259570414085 1.7371614742375963 </statenode>
+<statenode id='psi'>((((0[&amp;deme=B]:0.0823756818364096,1[&amp;deme=B]:0.0823756818364096)10[&amp;deme=B]:0.20476114803688128,2[&amp;deme=B]:0.28713682987329087)11[&amp;deme=B]:0.19469725314289626,(3[&amp;deme=B]:0.17752933470992963,((4[&amp;deme=A]:0.06770663334034988,(5[&amp;deme=A]:0.06529080444836324,(6[&amp;deme=A]:0.018091551296122242,7[&amp;deme=A]:0.018091551296122242)12[&amp;deme=A]:0.047199253152241)13[&amp;deme=A]:0.002415828891986632)14[&amp;deme=A]:0.03206896644507458,8[&amp;deme=A]:0.09977559978542445)15[&amp;deme=A]:0.07775373492450517)16[&amp;deme=B]:0.30430474830625753)17[&amp;deme=B]:6.803511584464359,9[&amp;deme=B]:7.285345667480546)18:0.0</statenode>
+</itsabeastystatewerein>
+<!--
+{"operators":[
+{"id":"SkylineM.A_to_B.scale","p":0.75,"accept":109,"reject":128,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"SkylineM.B_to_A.scale","p":0.75,"accept":154,"reject":111,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"SkylineNe.A.scale","p":0.75,"accept":160,"reject":248,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"SkylineNe.B.scale","p":0.75,"accept":272,"reject":154,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.intervalScale","p":0.10000000000000002,"accept":210,"reject":552,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.narrowExchange","p":"NaN","accept":15,"reject":694,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.rootAgeScale","p":0.75,"accept":80,"reject":74,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.subtreeSlide","p":0.5011584025429564,"accept":77,"reject":664,"acceptFC":0,"rejectFC":0,"rejectIv":302,"rejectOp":302},
+{"id":"psi.uniform","p":0.10000000000000002,"accept":595,"reject":166,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.wideExchange","p":"NaN","accept":0,"reject":268,"acceptFC":0,"rejectFC":0,"rejectIv":133,"rejectOp":133},
+{"id":"psi.wilsonBalding","p":"NaN","accept":0,"reject":270,"acceptFC":0,"rejectFC":0,"rejectIv":93,"rejectOp":93}
+]}
+-->

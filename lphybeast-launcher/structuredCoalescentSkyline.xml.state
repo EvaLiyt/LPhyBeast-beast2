@@ -1,0 +1,20 @@
+<itsabeastystatewerein version='2.0' sample='5000'>
+<statenode id='M'>M{2, }: 1.5414222934067494 0.39320717130793853 </statenode>
+<statenode id='SkylineNe.A'>SkylineNe.A{2, }: -2.5259298761451356 -3.2475506352044787 </statenode>
+<statenode id='SkylineNe.B'>SkylineNe.B{2, }: 0.9640508166217687 -0.031138226150302133 </statenode>
+<statenode id='psi'>((((0[&amp;deme=A]:0.6632804314648754,((1[&amp;deme=B]:0.20607768347334096,(2[&amp;deme=A]:0.013171162812176217,3[&amp;deme=A]:0.013171162812176217)10[&amp;deme=A]:0.19290652066116473)12[&amp;deme=B]:0.027951292285377377,4[&amp;deme=B]:0.23402897575871834)11[&amp;deme=B]:0.429251455706157)13[&amp;deme=B]:2.5092773145380645,(8[&amp;deme=A]:0.46266768108659156,9[&amp;deme=B]:0.46266768108659156)15[&amp;deme=B]:2.709890064916348)16[&amp;deme=B]:0.49688559435309587,(6[&amp;deme=B]:0.24697082693248001,7[&amp;deme=B]:0.24697082693248001)14[&amp;deme=B]:3.4224725134235556)17:0.3202837384251165,5[&amp;deme=A]:3.989727078781152)18[&amp;deme=B]:0.0</statenode>
+</itsabeastystatewerein>
+<!--
+{"operators":[
+{"id":"M.scale","p":0.75,"accept":191,"reject":94,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"SkylineNe.A.scale","p":0.75,"accept":134,"reject":160,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"SkylineNe.B.scale","p":0.75,"accept":169,"reject":138,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.intervalScale","p":0.10000000000000002,"accept":205,"reject":679,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.narrowExchange","p":"NaN","accept":190,"reject":624,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.rootAgeScale","p":0.75,"accept":70,"reject":113,"acceptFC":0,"rejectFC":0,"rejectIv":50,"rejectOp":50},
+{"id":"psi.subtreeSlide","p":0.380547654251743,"accept":183,"reject":643,"acceptFC":0,"rejectFC":0,"rejectIv":209,"rejectOp":209},
+{"id":"psi.uniform","p":0.10000000000000002,"accept":665,"reject":146,"acceptFC":0,"rejectFC":0,"rejectIv":0,"rejectOp":0},
+{"id":"psi.wideExchange","p":"NaN","accept":5,"reject":284,"acceptFC":0,"rejectFC":0,"rejectIv":160,"rejectOp":160},
+{"id":"psi.wilsonBalding","p":"NaN","accept":8,"reject":300,"acceptFC":0,"rejectFC":0,"rejectIv":103,"rejectOp":103}
+]}
+-->
