@@ -29,15 +29,3 @@ tmp/
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
-
-# --- added during laptop migration 2026 ---
-.DS_Store
-node_modules/
-.venv/
-venv/
-__pycache__/
-*.pyc
-.Rhistory
-.Rapp.history
-_site/
-.pytest_cache/
