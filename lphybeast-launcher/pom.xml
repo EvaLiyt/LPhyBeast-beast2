@@ -55,20 +55,20 @@
             </dependencies>
         </profile>
 
-        <profile>
-            <id>bdtree</id>
-            <dependencies>
-                <dependency>
-                    <groupId>io.github.linguaphylo</groupId>
-                    <artifactId>lphybeast-bdtree</artifactId>
-                    <version>${project.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>io.github.compevol</groupId>
-                    <artifactId>bdtree</artifactId>
-                </dependency>
-            </dependencies>
-        </profile>
+<!--        <profile>-->
+<!--            <id>bdtree</id>-->
+<!--            <dependencies>-->
+<!--                <dependency>-->
+<!--                    <groupId>io.github.linguaphylo</groupId>-->
+<!--                    <artifactId>lphybeast-bdtree</artifactId>-->
+<!--                    <version>${project.version}</version>-->
+<!--                </dependency>-->
+<!--                <dependency>-->
+<!--                    <groupId>io.github.compevol</groupId>-->
+<!--                    <artifactId>bdtree</artifactId>-->
+<!--                </dependency>-->
+<!--            </dependencies>-->
+<!--        </profile>-->
 
         <profile>
             <id>flc</id>
@@ -81,21 +81,6 @@
                 <dependency>
                     <groupId>io.github.4ment</groupId>
                     <artifactId>flc</artifactId>
-                </dependency>
-            </dependencies>
-        </profile>
-
-        <profile>
-            <id>ma</id>
-            <dependencies>
-                <dependency>
-                    <groupId>io.github.linguaphylo</groupId>
-                    <artifactId>lphybeast-ma</artifactId>
-                    <version>${project.version}</version>
-                </dependency>
-                <dependency>
-                    <groupId>io.github.compevol</groupId>
-                    <artifactId>mutable-alignment</artifactId>
                 </dependency>
             </dependencies>
         </profile>
