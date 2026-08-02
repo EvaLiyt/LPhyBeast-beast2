@@ -34,10 +34,9 @@
 
     <modules>
         <module>lphybeast</module>
-        <module>lphybeast-bdtree</module>
+<!--        <module>lphybeast-bdtree</module>-->
         <module>lphybeast-feast</module>
         <module>lphybeast-mc3</module>
-        <module>lphybeast-ma</module>
         <module>lphybeast-sa</module>
         <module>lphybeast-mm</module>
         <module>lphybeast-orc</module>
@@ -82,7 +81,7 @@
             <!-- External BEAST2 packages -->
             <dependency><groupId>io.github.beast2-dev</groupId><artifactId>substmodels</artifactId><version>${substmodels.version}</version></dependency>
             <dependency><groupId>io.github.tgvaughan</groupId><artifactId>feast</artifactId><version>${feast.version}</version></dependency>
-            <dependency><groupId>io.github.compevol</groupId><artifactId>bdtree</artifactId><version>${bdtree.version}</version></dependency>
+<!--            <dependency><groupId>io.github.compevol</groupId><artifactId>bdtree</artifactId><version>${bdtree.version}</version></dependency>-->
             <dependency><groupId>io.github.4ment</groupId><artifactId>flc</artifactId><version>${flc.version}</version></dependency>
             <dependency><groupId>io.github.compevol</groupId><artifactId>mutable-alignment</artifactId><version>${mutable.alignment.version}</version></dependency>
             <dependency><groupId>io.github.compevol</groupId><artifactId>mascot</artifactId><version>${mascot.version}</version></dependency>
