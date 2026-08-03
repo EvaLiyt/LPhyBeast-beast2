@@ -1,0 +1,9 @@
+<package name='lphybeast-orc' version='1.4.0'>
+    <depends on='lphybeast' atleast='1.4.0'/>
+    <depends on='ORC' atleast='1.3.1'/>
+
+    <service type="lphybeast.spi.ClockOperatorContributor">
+        <provider classname="orc.lphybeast.ORCClockOperatorContributor"/>
+    </service>
+
+</package>
