@@ -1,0 +1,9 @@
+<package name='lphybeast-mm' version='1.4.0'>
+    <depends on='lphybeast' atleast='1.4.0'/>
+    <depends on='MM' atleast='1.3.0'/>
+
+    <service type="lphybeast.spi.LPhyBEASTMapping">
+        <provider classname="mm.lphybeast.spi.MMLBImpl"/>
+    </service>
+
+</package>

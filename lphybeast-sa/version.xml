@@ -1,0 +1,9 @@
+<package name='lphybeast-sa' version='1.4.0'>
+    <depends on='lphybeast' atleast='1.4.0'/>
+    <depends on='SA' atleast='2.3.0'/>
+
+    <service type="lphybeast.spi.LPhyBEASTMapping">
+        <provider classname="sa.lphybeast.spi.SALBImpl"/>
+    </service>
+
+</package>
