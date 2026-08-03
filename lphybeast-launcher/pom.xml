@@ -197,6 +197,13 @@
                 <commandlineArgs>-Dpicocli.disable.closures=true --module-path %classpath --add-modules ALL-MODULE-PATH -m lphy.beast/lphybeast.LPhyBeastMain ${lphybeast.args}</commandlineArgs>
             </configuration>
         </plugin>
+        <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <configuration>
+                <skipPublishing>true</skipPublishing>
+            </configuration>
+        </plugin>
     </plugins></build>
 
 </project>
