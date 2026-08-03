@@ -69,7 +69,6 @@
 
         <!-- Optional dependencies moved to extension modules:
              substmodels         -> lphybeast-ssm
-             feast              -> lphybeast-feast
              beast-bdtree       -> lphybeast-bdtree
              beast-coupled-mcmc -> lphybeast-mc3
              beast-mutable-alignment -> lphybeast-ma

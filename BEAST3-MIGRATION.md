@@ -179,6 +179,11 @@ can be vendored or kept as BEASTLabs deps.
 Feast dependency reduced to **expression handling only** (`ExpCalculator`).
 `Concatenate` and `Slice` are no longer used anywhere in LPhyBeast.
 
+**Update (3 Aug 2026)**: feast has since been removed entirely. Its remaining
+role (`ExpCalculator`) is no longer needed — the functionality is covered by
+beast3 core's own spec API (e.g. `beast.base.spec.inference.parameter.VectorElement`).
+No feast dependency remains in any pom, and `lphybeast-feast` was never created.
+
 ### Phase 4: Resolve ORC dependencies (6 classes)
 
 ✅ Done. ORC operators moved to `lphybeast-orc` extension module with
@@ -214,7 +219,7 @@ a plugin `ModuleLayer` at startup) is unfinished work, not a design decision.
 |---------|---------|--------|
 | BEAST_CLASSIC | core (discrete phylogeography) | ✅ Maven dep (`io.github.compevol:beast-classic`), already spec-migrated |
 | BEASTLabs | core (BernoulliDistribution, WeightedDirichlet) | ✅ Maven dep, already spec-migrated. PR: BEAST2-Dev/BEASTLabs#27 |
-| feast | lphybeast-feast (ExpCalculator only) | ✅ Maven dep, expression handling |
+| feast | ~~lphybeast-feast (ExpCalculator only)~~ | ✅ Removed entirely (3 Aug 2026) — beast3 core's spec API (`VectorElement`) covers the remaining functionality |
 | ORC | lphybeast-orc | ✅ Separate extension module |
 | Mascot | lphybeast-mascot | ✅ Separate extension module |
 | flc | lphybeast-flc | ✅ Done (6 Apr). `io.github.compevol:flc:1.3.0-SNAPSHOT` |
@@ -267,7 +272,8 @@ rather than beast3 plumbing.
    `~/.beast/2.8/` (shared with beast3) or its own directory for installed
    packages?
 
-3. **feast timeline**: When will Tim release feast for beast3? Blocks Phase 3.
+3. ~~**feast timeline**: When will Tim release feast for beast3? Blocks Phase 3.~~
+   Resolved (3 Aug 2026): no longer needed — beast3 core's spec API covers it.
 
 4. **ORC timeline**: When will Jordan release ORC for beast3? LPhyBeast can
    proceed without it (optional).

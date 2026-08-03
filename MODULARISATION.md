@@ -2,6 +2,13 @@
 
 **Date**: 20 March 2026
 
+> **Update (3 Aug 2026)**: `lphybeast-feast` (below) was never created. The
+> `Concatenate`/`Slice` functionality it would have covered is now provided
+> natively by beast3 core (`beast.base.spec.inference.parameter.VectorElement`),
+> so feast is no longer a LPhyBeast dependency at all — not even for
+> `ExpCalculator`. All references to `lphybeast-feast`/feast below reflect the
+> plan as originally written and are kept for historical context.
+
 ## Problem
 
 The core `lphybeast` module has hard dependencies on BEAST packages that are

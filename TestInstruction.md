@@ -7,7 +7,7 @@
 ### Standard build (no SNAPSHOT dependencies)
 
 Every dependency required for the active reactor build — beast3 core, BEASTLabs,
-BEAST Classic, feast, Mascot, FLC, ORC, substmodels, morph-models,
+BEAST Classic, Mascot, FLC, ORC, substmodels, morph-models,
 sampled-ancestors, coupled-mcmc, and LPhy — is now a released version on Maven
 Central (see the root `pom.xml` `<properties>`/`<dependencyManagement>`). No
 sibling repos need to be checked out or built from source; a plain build
@@ -26,9 +26,6 @@ mvn -pl lphybeast test
 
 # SSM tests (skyline plots -- exercises GTR via substmodels)
 mvn -pl lphybeast-ssm test
-
-# Feast tests (RSV2 -- exercises WeightedDirichlet, kappa slicing)
-mvn -pl lphybeast-feast test
 
 # FLC tests
 mvn -pl lphybeast-flc test
@@ -104,4 +101,8 @@ Tree operators unchanged (not affected by spec changes).
 - `BEASTVector` vendored to `lphybeast.util` (removed from BEASTLabs).
 - `SliceDoubleArrayToBEAST` moved from `lphybeast-feast` to core.
 - feast dependency reduced to `ExpCalculator` only (expression handling).
+- **Update**: feast has since been removed entirely — beast3 core's spec API
+  (`beast.base.spec.inference.parameter.VectorElement`) covers the remaining
+  functionality, so no feast dependency remains and `lphybeast-feast` was
+  never created.
 

@@ -45,20 +45,6 @@
             </dependencies>
         </profile>
 
-<!--        <profile>-->
-<!--            <id>feast</id>-->
-<!--            <dependencies>-->
-<!--                <dependency>-->
-<!--                    <groupId>io.github.linguaphylo</groupId>-->
-<!--                    <artifactId>lphybeast-feast</artifactId>-->
-<!--                    <version>${project.version}</version>-->
-<!--                </dependency>-->
-<!--                <dependency>-->
-<!--                    <groupId>io.github.tgvaughan</groupId>-->
-<!--                    <artifactId>feast</artifactId>-->
-<!--                </dependency>-->
-<!--            </dependencies>-->
-<!--        </profile>-->
 
 <!--        <profile>-->
 <!--            <id>bdtree</id>-->
@@ -167,7 +153,7 @@
 
         <!-- Default: activate all extensions at once.
              Maven deactivates this profile automatically when any explicit -P flag
-             is passed, so "-Pssm" loads only SSM, "-Pssm,feast" loads SSM+feast,
+             is passed, so "-Pssm" loads only SSM, "-Pssm,flc" loads SSM+FLC,
              while plain "mvn exec:java" loads everything. -->
         <profile>
             <id>all</id>
@@ -177,7 +163,6 @@
             <dependencies>
                 <!-- Sister modules -->
                 <dependency><groupId>io.github.linguaphylo</groupId><artifactId>lphybeast-ssm</artifactId><version>${project.version}</version></dependency>
-<!--                <dependency><groupId>io.github.linguaphylo</groupId><artifactId>lphybeast-feast</artifactId><version>${project.version}</version></dependency>-->
 <!--                <dependency><groupId>io.github.linguaphylo</groupId><artifactId>lphybeast-bdtree</artifactId><version>${project.version}</version></dependency>-->
                 <dependency><groupId>io.github.linguaphylo</groupId><artifactId>lphybeast-flc</artifactId><version>${project.version}</version></dependency>
                 <dependency><groupId>io.github.linguaphylo</groupId><artifactId>lphybeast-mascot</artifactId><version>${project.version}</version></dependency>
@@ -187,7 +172,6 @@
                 <dependency><groupId>io.github.linguaphylo</groupId><artifactId>lphybeast-sa</artifactId><version>${project.version}</version></dependency>
                 <!-- External BEAST2 package JARs — direct deps so %classpath is complete -->
                 <dependency><groupId>io.github.beast2-dev</groupId><artifactId>substmodels</artifactId></dependency>
-<!--                <dependency><groupId>io.github.tgvaughan</groupId><artifactId>feast</artifactId></dependency>-->
 <!--                <dependency><groupId>io.github.compevol</groupId><artifactId>bdtree</artifactId></dependency>-->
                 <dependency><groupId>io.github.4ment</groupId><artifactId>flc</artifactId></dependency>
                 <dependency><groupId>io.github.compevol</groupId><artifactId>mutable-alignment</artifactId></dependency>

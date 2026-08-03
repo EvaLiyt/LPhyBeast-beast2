@@ -14,7 +14,6 @@ This project is a Maven multi-module reactor. Each module has a distinct role:
 |--------|------|
 | `lphybeast` | Core translator — the main released artifact. Implements the LPhy-to-BEAST XML pipeline and the `LPhyBEASTLoader` service registry. |
 | `lphybeast-ssm` | Extension: substitution models (GTR, HKY, …) via the `substmodels` BEAST2 package |
-| `lphybeast-feast` | Extension: feast functions via the `feast` BEAST2 package |
 | `lphybeast-bdtree` | Extension: birth-death tree models via the `bdtree` BEAST2 package |
 | `lphybeast-flc` | Extension: Flexible Local Clock via the `flc` BEAST2 package |
 | `lphybeast-mascot` | Extension: structured coalescent via the `mascot` BEAST2 package |
@@ -52,7 +51,6 @@ Maven profiles control which extensions are placed on the module path:
 |---------|-----------------|
 | `all` _(active by default — no `-P` needed)_ | All extensions |
 | `ssm` | `substmodels` — substitution models (GTR, HKY, …) |
-| `feast` | `feast` — feast functions |
 | `bdtree` | `bdtree` — birth-death tree models |
 | `flc` | `flc` — Flexible Local Clock |
 | `mascot` | `mascot` — structured coalescent |
@@ -60,7 +58,7 @@ Maven profiles control which extensions are placed on the module path:
 | `mm` | `morph-models` — morphological models |
 | `orc` | `beast-orc` — ORC relaxed clocks |
 | `sa` | `sampled-ancestors` — sampled ancestors |
-| `ssm,feast,mascot,orc` (any comma-separated combination) | Selected extensions only — use `all` (no `-P`) to load everything |
+| `ssm,mascot,orc` (any comma-separated combination) | Selected extensions only — use `all` (no `-P`) to load everything |
 
 Passing any explicit `-P` flag deactivates the `all` profile automatically, so only the
 named profiles are active.
@@ -69,7 +67,7 @@ See [Selecting extensions](#selecting-extensions) for full command examples.
 ## Building from source
 
 Requires Java 25 and Maven 3.9+. Every dependency — beast3 core, BEASTLabs, BEAST Classic,
-feast, Mascot, FLC, ORC, substmodels, morph-models, sampled-ancestors, coupled-mcmc, and
+Mascot, FLC, ORC, substmodels, morph-models, sampled-ancestors, coupled-mcmc, and
 LPhy — is a released version on Maven Central (see the root `pom.xml`
 `<dependencyManagement>`), so no sibling repos need to be checked out or built from
 source:
@@ -214,7 +212,6 @@ mvn -pl lphybeast exec:exec -Dlphybeast.args="convert script.lphy"
 
 ```bash
 mvn -pl lphybeast test            # core tests
-mvn -pl lphybeast-feast test      # feast extension tests
 mvn -pl lphybeast-flc test        # FLC extension tests
 mvn -pl lphybeast-mascot test     # Mascot extension tests
 ```

@@ -161,9 +161,3 @@ Then remove `BEASTContext.createBEASTFrequencies()` (after all callers migrated)
 - ✅ BEAST exec verified: 10k steps, all operators functional
 - ✅ Module uncommented in root pom.xml
 - ✅ Removed old `lib/` JAR and `src/assembly/` descriptor
-
-## TODO: Extension modules
-
-| Module | Scope |
-|--------|-------|
-| `lphybeast-feast` | 3 generators, `Function` dependency |
