@@ -8,12 +8,6 @@
     <artifactId>lphybeast-launcher</artifactId>
     <packaging>pom</packaging>
     <name>lphybeast-launcher</name>
-
-    <!-- Dev-only composition module, produces no artifact — never publish it -->
-    <properties>
-        <maven.deploy.skip>true</maven.deploy.skip>
-    </properties>
-
     <!-- Core: always present -->
     <dependencies>
         <dependency>
@@ -200,8 +194,17 @@
         <plugin>
             <groupId>org.sonatype.central</groupId>
             <artifactId>central-publishing-maven-plugin</artifactId>
+            <!-- This prevents the plugin from altering the deploy lifecycle for this module -->
+            <extensions>false</extensions>
+            <executions>
+                <execution>
+                    <!-- Targets the default execution ID injected by the plugin -->
+                    <id>injected-central-publishing</id>
+                    <phase>none</phase> <!-- Disables the execution completely -->
+                </execution>
+            </executions>
             <configuration>
-                <skipPublishing>true</skipPublishing>
+                <skipPublishing>true</skipPublishing> <!-- Double-layer skip fallback -->
             </configuration>
         </plugin>
     </plugins></build>
