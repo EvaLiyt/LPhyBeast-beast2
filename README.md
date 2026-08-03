@@ -17,7 +17,6 @@ This project is a Maven multi-module reactor. Each module has a distinct role:
 | `lphybeast-feast` | Extension: feast functions via the `feast` BEAST2 package |
 | `lphybeast-bdtree` | Extension: birth-death tree models via the `bdtree` BEAST2 package |
 | `lphybeast-flc` | Extension: Flexible Local Clock via the `flc` BEAST2 package |
-| `lphybeast-ma` | Extension: mutable alignment via the `mutable-alignment` BEAST2 package |
 | `lphybeast-mascot` | Extension: structured coalescent via the `mascot` BEAST2 package |
 | `lphybeast-mc3` | Extension: coupled MCMC via the `coupled-mcmc` BEAST2 package |
 | `lphybeast-mm` | Extension: morphological models via the `morph-models` BEAST2 package |
@@ -32,10 +31,12 @@ All external BEAST2 package versions are managed centrally in the root pom's
 
 `lphybeast-launcher` solves a dependency composition problem specific to development.
 
-After release, `lphybeast.jar` discovers installed extensions at runtime through BEAST2's
-`PackageManager`, which scans `~/.beast/`. During development there is no installed
-BEAST2 package tree, so extensions must be placed directly on the JVM module path via
-Maven's `%classpath` expansion.
+LPhyBeast is a standalone application, not itself a BEAST2/3 package (see
+[BEAST3-MIGRATION.md](BEAST3-MIGRATION.md) design principle 1), so its own extension
+modules aren't "installed" anywhere — they're discovered purely by being on the JVM's
+module path at launch (see [Extension mechanism](#extension-mechanism) below). During
+development there is no packaged distribution, so extensions must be placed directly on
+the module path via Maven's `%classpath` expansion.
 
 Adding extension dependencies to `lphybeast` itself is not possible — every extension
 already depends on `lphybeast`, which would create a circular dependency in the Maven
@@ -54,7 +55,6 @@ Maven profiles control which extensions are placed on the module path:
 | `feast` | `feast` — feast functions |
 | `bdtree` | `bdtree` — birth-death tree models |
 | `flc` | `flc` — Flexible Local Clock |
-| `ma` | `mutable-alignment` — mutable alignment |
 | `mascot` | `mascot` — structured coalescent |
 | `mc3` | `coupled-mcmc` — coupled MCMC |
 | `mm` | `morph-models` — morphological models |
@@ -68,26 +68,18 @@ See [Selecting extensions](#selecting-extensions) for full command examples.
 
 ## Building from source
 
-Requires Java 25 and Maven.
-
-Build prerequisites first (each on its appropriate branch):
-
-```bash
-# 1. beast3
-cd ~/Git/beast3 && git checkout vector-element && mvn install -DskipTests
-
-# 2. BEASTLabs
-cd ~/Git/BEASTLabs && git checkout beast3 && mvn install -DskipTests
-
-# 3. LPhy
-cd ~/Git/linguaPhylo && mvn install -DskipTests
-```
-
-Then build LPhyBeast (from the project root):
+Requires Java 25 and Maven 3.9+. Every dependency — beast3 core, BEASTLabs, BEAST Classic,
+feast, Mascot, FLC, ORC, substmodels, morph-models, sampled-ancestors, coupled-mcmc, and
+LPhy — is a released version on Maven Central (see the root `pom.xml`
+`<dependencyManagement>`), so no sibling repos need to be checked out or built from
+source:
 
 ```bash
 mvn clean install -DskipTests
 ```
+
+> `lphybeast-bdtree` is excluded from the root `pom.xml`'s `<modules>` — its upstream
+> `bdtree` package is still SNAPSHOT-only, so a standard build never touches it.
 
 ## Running
 
@@ -260,29 +252,43 @@ mapping classes. Extension modules add mappings for specific BEAST packages.
 
 ### Extension mechanism
 
-Extensions are discovered at runtime by `LPhyBEASTLoader` via BEAST2's
-`BEASTClassLoader.loadService()`, which reads BEAST2's internal service registry.
-That registry is populated from `version.xml` files embedded in each BEAST2 package JAR
-and scanned by `BEASTClassLoader.initServices()` at startup.
+LPhyBeast is a standalone application, not itself a BEAST2/3 package ([BEAST3-MIGRATION.md](BEAST3-MIGRATION.md)
+design principle 1): it embeds beast3's package manager (`beast-pkgmgmt`) as a *library*
+to resolve and install *other* beast3 packages for its own use, rather than being
+installed itself as one.
 
-The JPMS `module-info.java` `provides lphybeast.spi.LPhyBEASTMapping with ...`
-declarations serve a complementary role: they allow the JPMS module graph to resolve and
-load the extension module at JVM startup so that `BEASTClassLoader` can subsequently
-find and instantiate the implementation. Note that Java's standard `ServiceLoader` is
-**not** used here — `BEASTClassLoader` and the BEAST2 package registry are the
-authoritative loading mechanism.
+`LPhyBEASTLoader`'s singleton constructor discovers LPhyBeast's own extensions via
+`BEASTClassLoader.loadService(LPhyBEASTMapping.class)`, which primarily triggers **JPMS
+module descriptor scanning**: it reads the `provides lphybeast.spi.LPhyBEASTMapping
+with ...` declaration in each extension module's `module-info.java`. This only requires
+the extension's jar to be on the JVM's module path — it does not depend on any package
+being "installed", and Java's standard `ServiceLoader` is not used (`BEASTClassLoader`
+is the authoritative loader).
+
+> **Note on `version.xml`:** each module still ships its own `version.xml`, but for
+> LPhyBeast's own extension modules that file is *not* embedded in the module's jar, so
+> the JPMS scan above never reads it. It's only consumed by the explicit
+> `LPhyBEASTLoader.loadServicesForTest()` / `addBEAST2Services(String[])` path — used by
+> unit tests (which run on Surefire's plain classpath, where JPMS module scanning doesn't
+> apply) and by IDE runs.
 
 **Development** (Maven `exec:exec`): all dependency JARs are placed on `--module-path`
 via `%classpath`; `--add-modules ALL-MODULE-PATH` adds every named JPMS module on that
-path to the module graph automatically.
+path to the module graph automatically, making their `module-info.java` `provides`
+declarations visible to `BEASTClassLoader.loadService()`.
 
-**Production** (released BEAST2 package): `PackageManager.loadExternalJars()` scans
-`~/.beast/2.x/` for installed packages and registers their `version.xml` services with
-`BEASTClassLoader`.
+**Installing other beast3 packages** (SA, Mascot, substmodels, etc. — the packages
+LPhyBeast's extension modules integrate, not LPhyBeast itself): the `install`/`list`/
+`remove` subcommands use beast3's `PackageManager` against LPhyBeast's *own* package
+directory (`Utils6.getPackageUserDir("LPhyBEAST")`, overridable with `--packagedir`) —
+not the shared `~/.beast/2.x/` BEAST2 directory. Note that installing a package this way
+does not by itself make it loadable by `LPhyBEASTLoader` — its jar still needs to be on
+the module path at launch (see [BEAST3-MIGRATION.md](BEAST3-MIGRATION.md) Phase 5 for
+the current gap between the two).
 
 ## Testing guide
 
-See [TESTING.md](TESTING.md) for detailed testing instructions.
+See [TESTING.md](TestInstruction.md) for detailed testing instructions.
 
 ## Tutorials
 

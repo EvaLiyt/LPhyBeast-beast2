@@ -79,7 +79,8 @@ LPhyBeast (standalone app, JPMS)
 ```
 
 **Build**: Maven, Java 25, JPMS modules
-**Entry point**: `lphybeast.LPhyBeastCMD` (PicoCLI, unchanged)
+**Entry point**: `lphybeast.LPhyBeastMain` (PicoCLI) — replaces `LPhyBeastCMD` as of
+Phase 5, see below (this line originally said "unchanged"; it wasn't)
 **Extension mechanism**: SPI via `lphybeast.spi.LPhyBEASTExt`
 
 ## Package manager integration
@@ -186,9 +187,26 @@ remain in core `lphybeast/`.
 
 ### Phase 5: Package manager integration
 
-✅ Done. `LPhyBeastMain` provides subcommands: `convert`, `run`, `install`,
-`list`, `remove`. Uses beast3's `PackageManager` with its own package
-directory (`Utils6.getPackageUserDir("LPhyBEAST")`).
+⚠️ Partially done, corrected after reading `LPhyBEASTLoader`/`LPhyBeastMain`:
+
+`LPhyBeastMain` provides subcommands: `convert`, `run`, `install`, `list`, `remove`.
+`install`/`list`/`remove` use beast3's `PackageManager` against LPhyBeast's own package
+directory (`Utils6.getPackageUserDir("LPhyBEAST")`, overridable with `--packagedir`) —
+this half works as described.
+
+The other half — "How it works" step 2 above, where `beast-pkgmgmt` creates a plugin
+`ModuleLayer` per installed package so its SPI providers become dynamically
+discoverable — is **not implemented**. `LPhyBEASTLoader`'s singleton constructor
+discovers extensions via `BEASTClassLoader.loadService(LPhyBEASTMapping.class)`, which
+scans the boot module layer plus whatever `ModuleLayer`s are registered in
+`BEASTClassLoader`'s `pluginLayers` list (`beast-pkgmgmt` does support this via
+`registerPluginLayer()` — see its `BEASTClassLoader.java`). LPhyBeast never calls
+`registerPluginLayer()` anywhere, so that list stays empty. In practice, an extension is
+only found if its jar is already on the JVM's `--module-path` at launch (dev: via
+Maven's `%classpath` expansion in `lphybeast-launcher`) — running `lphybeast install`
+populates the package directory but does not, by itself, make that package's mappings
+loadable by a running LPhyBeast process. Closing this gap (wiring installed packages into
+a plugin `ModuleLayer` at startup) is unfinished work, not a design decision.
 
 ### Phase 6: Audit remaining BEAST package dependencies
 

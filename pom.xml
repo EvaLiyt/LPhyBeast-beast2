@@ -11,6 +11,31 @@
     <description>LPhy to BEAST 3 translator</description>
     <url>https://linguaphylo.github.io/</url>
 
+    <licenses>
+        <license>
+            <name>GNU Lesser General Public License v2.1</name>
+            <url>https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Walter Xie</name>
+            <url>https://github.com/walterxie</url>
+        </developer>
+        <developer>
+            <name>Alexei Drummond</name>
+            <url>https://github.com/alexeid</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/LinguaPhylo/LPhyBeast.git</connection>
+        <developerConnection>scm:git:ssh://github.com:LinguaPhylo/LPhyBeast.git</developerConnection>
+        <url>https://github.com/LinguaPhylo/LPhyBeast</url>
+    </scm>
+
     <properties>
         <lphy.version>1.8.0-beta1</lphy.version>
         <beast.version>2.8.0-beta7</beast.version>
@@ -18,7 +43,7 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- External BEAST2 package versions — managed here for all child modules -->
-        <bdtree.version>0.1.0-SNAPSHOT</bdtree.version>
+<!--        <bdtree.version>0.1.0-SNAPSHOT</bdtree.version>-->
         <beast.classic.version>1.7.0-beta1</beast.classic.version>
         <beast.labs.version>2.1.0-beta2</beast.labs.version>
         <beast.orc.version>1.3.1</beast.orc.version>
@@ -110,7 +135,75 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Source JAR — required for Maven Central; skipped automatically for pom-packaging modules -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
+
+    <profiles>
+        <!-- Activated by CI on v* tags: mvn -Prelease clean deploy -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.11.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <!-- https://maven.apache.org/plugins/maven-jar-plugin/examples/create-test-jar.html-->
 <!--    <dependencies>-->

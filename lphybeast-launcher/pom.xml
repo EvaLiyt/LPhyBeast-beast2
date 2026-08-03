@@ -9,6 +9,11 @@
     <packaging>pom</packaging>
     <name>lphybeast-launcher</name>
 
+    <!-- Dev-only composition module, produces no artifact — never publish it -->
+    <properties>
+        <maven.deploy.skip>true</maven.deploy.skip>
+    </properties>
+
     <!-- Core: always present -->
     <dependencies>
         <dependency>
