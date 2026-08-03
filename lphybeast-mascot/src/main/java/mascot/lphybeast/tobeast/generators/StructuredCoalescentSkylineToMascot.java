@@ -4,10 +4,12 @@ import beast.base.core.BEASTInterface;
 import beast.base.evolution.alignment.Taxon;
 import beast.base.evolution.alignment.TaxonSet;
 import beast.base.evolution.tree.TraitSet;
-import beast.base.inference.parameter.BooleanParameter;
-import beast.base.inference.parameter.CompoundRealParameter;
-import beast.base.inference.parameter.RealParameter;
-import beastlabs.util.BEASTVector;
+import beast.base.spec.domain.Real;
+import beast.base.spec.inference.parameter.BoolVectorParam;
+import beast.base.spec.inference.parameter.CompoundRealScalarParam;
+import beast.base.spec.inference.parameter.RealScalarParam;
+import beast.base.spec.inference.parameter.RealVectorParam;
+import lphybeast.util.BEASTVector;
 import lphy.base.evolution.coalescent.StructuredCoalescentSkyline;
 import lphy.base.evolution.tree.TimeTree;
 import lphy.base.evolution.tree.TimeTreeNode;
@@ -38,19 +40,18 @@ import java.util.List;
  *
  * <ul>
  *   <li>Constant migration ({@code M}) — {@link StructuredSkyline} dynamics with
- *       K per-deme Ne trajectories and a flat migration {@link RealParameter}.
- *       Ne follows {@code interpolation}: {@link StructuredSkygrid} for
- *       {@code "constant"}, {@link Skygrowth} for {@code "linear"}.</li>
+ *       K per-deme Ne trajectories and a flat migration {@link RealVectorParam}.</li>
  *   <li>Time-varying migration ({@code logM} + {@code migrationRateShifts}) —
- *       {@link StructuredMigrationSkyline} dynamics with K per-deme
- *       {@link Skygrowth} Ne trajectories (n_Ne knots) and K·(K-1) per-pair
- *       {@link Skygrowth} migration trajectories (n_M knots). Ne and migration
- *       knot counts and positions are independent, matching BEAUti's MASCOT
- *       Skyline template. {@link StructuredSkygrid} cannot participate here —
- *       it doesn't implement {@code getNeTime} (which
- *       {@link StructuredMigrationSkyline#getBackwardsMigration} requires) and
- *       its dimension would be driven by the outer union grid via
- *       {@code setNrIntervals}, destroying independent-grid support.</li>
+ *       {@link StructuredMigrationSkyline} dynamics with K per-deme Ne
+ *       trajectories and K·(K-1) per-pair {@link Skygrowth} migration
+ *       trajectories. In this path, migration is always piecewise-linear in
+ *       log space: {@link StructuredSkygrid} cannot serve as a migration
+ *       dynamic because {@link StructuredMigrationSkyline#getBackwardsMigration}
+ *       calls {@code getNeTime(t)} on migration objects, which
+ *       {@code StructuredSkygrid} does not implement. Current cut also
+ *       requires {@code migrationRateShifts} and {@code rateShifts} to share
+ *       the same knot times so per-deme Ne dimensions line up with the outer
+ *       integration grid without expansion.</li>
  * </ul>
  */
 public class StructuredCoalescentSkylineToMascot implements
@@ -68,8 +69,8 @@ public class StructuredCoalescentSkylineToMascot implements
         boolean isLinear = coalescent.isLinearInterpolation();
         boolean timeVaryingMigration = coalescent.isTimeVaryingMigration();
 
-        // === Per-deme logNe RealParameters (K of them, each dim n) ===
-        List<RealParameter> logNePerDeme = extractPerDemeLogNe(coalescent, context);
+        // === Per-deme logNe RealVectorParams (K of them, each dim n) ===
+        List<RealVectorParam<? extends Real>> logNePerDeme = extractPerDemeLogNe(coalescent, context);
 
         // === Rate-shift times: strip a leading 0.0 if present ===
         Double[] fullShifts = coalescent.getRateShifts().value();
@@ -131,10 +132,10 @@ public class StructuredCoalescentSkylineToMascot implements
 
     private StructuredSkyline buildConstantMigrationDynamics(
             StructuredCoalescentSkyline coalescent, BEASTContext context,
-            List<RealParameter> logNePerDeme, Double[] innerShifts,
+            List<RealVectorParam<? extends Real>> logNePerDeme, Double[] innerShifts,
             boolean isLinear, int nDemes, int nMigRates, List<String> uniqueDemes) {
 
-        RealParameter migrationParam = extractFlatM(coalescent, context, nMigRates);
+        RealVectorParam<? extends Real> migrationParam = extractFlatM(coalescent, context, nMigRates);
 
         List<NeDynamics> neDynamicsPerDeme = buildNeDynamicsPerDeme(
                 logNePerDeme, innerShifts, isLinear, nDemes, uniqueDemes);
@@ -153,7 +154,7 @@ public class StructuredCoalescentSkylineToMascot implements
                 ? buildFineIntegrationGrid(innerShifts, "SkylineRateShifts")
                 : buildOuterRateShifts(innerShifts, "SkylineRateShifts");
 
-        BooleanParameter indicators = buildAllTrueIndicators(nMigRates);
+        BoolVectorParam indicators = buildAllTrueIndicators(nMigRates);
 
         StructuredSkyline dynamics = new StructuredSkyline();
         dynamics.setInputValue("NeDynamics", neDynamicsList);
@@ -190,7 +191,7 @@ public class StructuredCoalescentSkylineToMascot implements
      */
     private StructuredMigrationSkyline buildTimeVaryingMigrationDynamics(
             StructuredCoalescentSkyline coalescent, BEASTContext context,
-            List<RealParameter> logNePerDeme, Double[] neInnerShifts,
+            List<RealVectorParam<? extends Real>> logNePerDeme, Double[] neInnerShifts,
             boolean isLinear, int nDemes, int nEpochs, int nMigRates, List<String> uniqueDemes) {
 
         int nMigEpochs = coalescent.getNMigEpochs();
@@ -210,7 +211,7 @@ public class StructuredCoalescentSkylineToMascot implements
 
         List<NeDynamics> neDynamicsPerDeme = new ArrayList<>();
         for (int d = 0; d < nDemes; d++) {
-            RealParameter demeLogNe = logNePerDeme.get(d);
+            RealVectorParam<? extends Real> demeLogNe = logNePerDeme.get(d);
             demeLogNe.setID("SkylineNe." + uniqueDemes.get(d));
 
             Skygrowth sg = new Skygrowth();
@@ -226,7 +227,7 @@ public class StructuredCoalescentSkylineToMascot implements
         neDynamicsList.initAndValidate();
 
         // Per-pair migration: Skygrowth with its own rateShifts (n_M - 1 inner knots).
-        List<RealParameter> logMPerPair = extractPerPairLogM(coalescent, context, nMigRates, nMigEpochs);
+        List<RealVectorParam<? extends Real>> logMPerPair = extractPerPairLogM(coalescent, context, nMigRates, nMigEpochs);
         RateShifts perPairMigRateShifts = new RateShifts();
         perPairMigRateShifts.setInputValue("value", new ArrayList<>(Arrays.asList(migInnerShifts)));
         perPairMigRateShifts.setID("MigrationRateShifts");
@@ -237,7 +238,7 @@ public class StructuredCoalescentSkylineToMascot implements
         for (int i = 0; i < nDemes; i++) {
             for (int j = 0; j < nDemes; j++) {
                 if (i == j) continue;
-                RealParameter pairLogM = logMPerPair.get(pairIdx);
+                RealVectorParam<? extends Real> pairLogM = logMPerPair.get(pairIdx);
                 String label = uniqueDemes.get(i) + "_to_" + uniqueDemes.get(j);
                 pairLogM.setID("SkylineM." + label);
 
@@ -265,7 +266,7 @@ public class StructuredCoalescentSkylineToMascot implements
         // by its midpoint value over a full skyline segment — far too coarse.
         Double[] unionInner = unionSorted(neInnerShifts, migInnerShifts);
         RateShifts outerRateShifts = buildFineIntegrationGrid(unionInner, "StructuredMigrationSkylineRateShifts");
-        BooleanParameter indicators = buildAllTrueIndicators(nMigRates);
+        BoolVectorParam indicators = buildAllTrueIndicators(nMigRates);
 
         StructuredMigrationSkyline dynamics = new StructuredMigrationSkyline();
         dynamics.setInputValue("NeDynamics", neDynamicsList);
@@ -294,7 +295,7 @@ public class StructuredCoalescentSkylineToMascot implements
      * time-varying-migration paths.
      */
     private List<NeDynamics> buildNeDynamicsPerDeme(
-            List<RealParameter> logNePerDeme, Double[] innerShifts,
+            List<RealVectorParam<? extends Real>> logNePerDeme, Double[] innerShifts,
             boolean isLinear, int nDemes, List<String> uniqueDemes) {
 
         List<NeDynamics> neDynamicsPerDeme = new ArrayList<>();
@@ -305,7 +306,7 @@ public class StructuredCoalescentSkylineToMascot implements
             perDemeRateShifts.initAndValidate();
 
             for (int d = 0; d < nDemes; d++) {
-                RealParameter demeLogNe = logNePerDeme.get(d);
+                RealVectorParam<? extends Real> demeLogNe = logNePerDeme.get(d);
                 demeLogNe.setID("SkylineNe." + uniqueDemes.get(d));
 
                 Skygrowth sg = new Skygrowth();
@@ -317,7 +318,7 @@ public class StructuredCoalescentSkylineToMascot implements
             }
         } else {
             for (int d = 0; d < nDemes; d++) {
-                RealParameter demeLogNe = logNePerDeme.get(d);
+                RealVectorParam<? extends Real> demeLogNe = logNePerDeme.get(d);
                 demeLogNe.setID("SkylineNe." + uniqueDemes.get(d));
 
                 StructuredSkygrid sg = new StructuredSkygrid();
@@ -382,10 +383,10 @@ public class StructuredCoalescentSkylineToMascot implements
         return rs;
     }
 
-    private BooleanParameter buildAllTrueIndicators(int nMigRates) {
-        BooleanParameter indicators = new BooleanParameter();
+    private BoolVectorParam buildAllTrueIndicators(int nMigRates) {
         Boolean[] allTrue = new Boolean[nMigRates];
         Arrays.fill(allTrue, Boolean.TRUE);
+        BoolVectorParam indicators = new BoolVectorParam();
         indicators.setInputValue("value", Arrays.asList(allTrue));
         indicators.setInputValue("dimension", nMigRates);
         indicators.setInputValue("estimate", false);
@@ -395,11 +396,11 @@ public class StructuredCoalescentSkylineToMascot implements
     }
 
     /**
-     * Resolve the LPhy logNe to K per-deme RealParameters of dim nEpochs each.
-     * Expects a BEASTVector of K RealParameters (the auto-vectorisation result).
+     * Resolve the LPhy logNe to K per-deme RealVectorParams of dim nEpochs each.
+     * Expects a BEASTVector of K RealVectorParams (the auto-vectorisation result).
      */
-    private List<RealParameter> extractPerDemeLogNe(StructuredCoalescentSkyline coalescent,
-                                                     BEASTContext context) {
+    private List<RealVectorParam<? extends Real>> extractPerDemeLogNe(
+            StructuredCoalescentSkyline coalescent, BEASTContext context) {
         int nDemes = coalescent.getNDemes();
         int nEpochs = coalescent.getNEpochs();
         Value<Double[][]> logNeValue = coalescent.getLogNe();
@@ -411,16 +412,16 @@ public class StructuredCoalescentSkylineToMascot implements
                 throw new IllegalArgumentException(
                         "logNe BEASTVector has " + components.size() + " components, expected " + nDemes);
             }
-            List<RealParameter> result = new ArrayList<>();
+            List<RealVectorParam<? extends Real>> result = new ArrayList<>();
             for (int d = 0; d < nDemes; d++) {
                 BEASTInterface c = components.get(d);
-                if (!(c instanceof RealParameter rp)) {
+                if (!(c instanceof RealVectorParam<?> rp)) {
                     throw new IllegalArgumentException(
-                            "logNe component " + d + " is " + c.getClass() + ", expected RealParameter");
+                            "logNe component " + d + " is " + c.getClass() + ", expected RealVectorParam");
                 }
-                if (rp.getDimension() != nEpochs) {
+                if (rp.size() != nEpochs) {
                     throw new IllegalArgumentException(
-                            "logNe component " + d + " has dim " + rp.getDimension() + ", expected " + nEpochs);
+                            "logNe component " + d + " has dim " + rp.size() + ", expected " + nEpochs);
                 }
                 result.add(rp);
             }
@@ -429,19 +430,19 @@ public class StructuredCoalescentSkylineToMascot implements
 
         throw new IllegalArgumentException(
                 "StructuredCoalescentSkyline requires logNe as per-deme vectorised chains " +
-                        "(BEASTVector of K RealParameters). Got: " + beastObj.getClass().getSimpleName() +
+                        "(BEASTVector of K RealVectorParams). Got: " + beastObj.getClass().getSimpleName() +
                         ". Use auto-vectorisation, e.g. " +
                         "logNe ~ GaussianRandomWalk(firstValue=Normal(..., replicates=K), sd=..., n=n).");
     }
 
     /**
-     * Resolve the LPhy logM to K·(K-1) per-pair RealParameters of dim nMigEpochs
-     * each. Expects a BEASTVector of K·(K-1) RealParameters (the auto-vectorisation
+     * Resolve the LPhy logM to K·(K-1) per-pair RealVectorParams of dim nMigEpochs
+     * each. Expects a BEASTVector of K·(K-1) RealVectorParams (the auto-vectorisation
      * result), analogous to logNe.
      */
-    private List<RealParameter> extractPerPairLogM(StructuredCoalescentSkyline coalescent,
-                                                    BEASTContext context,
-                                                    int nPairs, int nMigEpochs) {
+    private List<RealVectorParam<? extends Real>> extractPerPairLogM(
+            StructuredCoalescentSkyline coalescent, BEASTContext context,
+            int nPairs, int nMigEpochs) {
         Value<Double[][]> logMValue = coalescent.getLogM();
         BEASTInterface beastObj = context.getBEASTObject(logMValue);
 
@@ -451,16 +452,16 @@ public class StructuredCoalescentSkylineToMascot implements
                 throw new IllegalArgumentException(
                         "logM BEASTVector has " + components.size() + " components, expected " + nPairs);
             }
-            List<RealParameter> result = new ArrayList<>();
+            List<RealVectorParam<? extends Real>> result = new ArrayList<>();
             for (int p = 0; p < nPairs; p++) {
                 BEASTInterface c = components.get(p);
-                if (!(c instanceof RealParameter rp)) {
+                if (!(c instanceof RealVectorParam<?> rp)) {
                     throw new IllegalArgumentException(
-                            "logM component " + p + " is " + c.getClass() + ", expected RealParameter");
+                            "logM component " + p + " is " + c.getClass() + ", expected RealVectorParam");
                 }
-                if (rp.getDimension() != nMigEpochs) {
+                if (rp.size() != nMigEpochs) {
                     throw new IllegalArgumentException(
-                            "logM component " + p + " has dim " + rp.getDimension() + ", expected " + nMigEpochs);
+                            "logM component " + p + " has dim " + rp.size() + ", expected " + nMigEpochs);
                 }
                 result.add(rp);
             }
@@ -469,50 +470,51 @@ public class StructuredCoalescentSkylineToMascot implements
 
         throw new IllegalArgumentException(
                 "StructuredCoalescentSkyline requires logM as per-pair vectorised chains " +
-                        "(BEASTVector of K*(K-1) RealParameters). Got: " + beastObj.getClass().getSimpleName() +
+                        "(BEASTVector of K*(K-1) RealVectorParams). Got: " + beastObj.getClass().getSimpleName() +
                         ". Use auto-vectorisation, e.g. " +
                         "logM ~ GaussianRandomWalk(firstValue=Normal(..., replicates=K*(K-1)), sd=..., n=n_M).");
     }
 
     /**
-     * Resolve the LPhy M to a single flat RealParameter of dim K*(K-1).
-     * Accepts either a single RealParameter (e.g. from LogNormalMulti / Dirichlet /
-     * raw data) or a BEASTVector of scalars (e.g. from LogNormal with replicates),
-     * wrapping the latter in a {@link CompoundRealParameter}.
+     * Resolve the LPhy M to a single flat RealVectorParam of dim K*(K-1).
+     * Accepts either a single RealVectorParam (e.g. from LogNormalMulti / Dirichlet /
+     * raw data) or a BEASTVector of RealScalarParams (e.g. from LogNormal with
+     * replicates), wrapping the latter in a {@link CompoundRealScalarParam}.
      */
-    private RealParameter extractFlatM(StructuredCoalescentSkyline coalescent,
-                                       BEASTContext context,
-                                       int expectedDim) {
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private RealVectorParam<? extends Real> extractFlatM(StructuredCoalescentSkyline coalescent,
+                                                          BEASTContext context,
+                                                          int expectedDim) {
         Value<Double[]> mValue = coalescent.getM();
         BEASTInterface beastObj = context.getBEASTObject(mValue);
 
-        if (beastObj instanceof RealParameter rp) {
-            if (rp.getDimension() != expectedDim) {
+        if (beastObj instanceof RealVectorParam<?> rvp) {
+            if (rvp.size() != expectedDim) {
                 throw new IllegalArgumentException(
-                        "M RealParameter has dim " + rp.getDimension() + ", expected " + expectedDim);
+                        "M RealVectorParam has dim " + rvp.size() + ", expected " + expectedDim);
             }
-            return rp;
+            return rvp;
         }
 
         if (beastObj instanceof BEASTVector vec) {
             List<BEASTInterface> components = vec.getObjectList();
-            List<RealParameter> realParams = new ArrayList<>();
+            List<RealScalarParam> realScalars = new ArrayList<>();
             int totalDim = 0;
             for (BEASTInterface c : components) {
-                if (!(c instanceof RealParameter rp)) {
+                if (!(c instanceof RealScalarParam rsp)) {
                     throw new IllegalArgumentException(
-                            "M BEASTVector contains " + c.getClass() + ", expected RealParameter");
+                            "M BEASTVector contains " + c.getClass() + ", expected RealScalarParam");
                 }
-                realParams.add(rp);
-                totalDim += rp.getDimension();
+                realScalars.add(rsp);
+                totalDim += 1; // RealScalarParam is always dim 1
             }
             if (totalDim != expectedDim) {
                 throw new IllegalArgumentException(
                         "M BEASTVector total dim " + totalDim + " != expected " + expectedDim);
             }
 
-            CompoundRealParameter compound = new CompoundRealParameter();
-            compound.setInputValue("parameter", realParams);
+            CompoundRealScalarParam<Real> compound = new CompoundRealScalarParam<>();
+            compound.setInputValue("parameter", realScalars);
             compound.setID("M.compound");
             compound.initAndValidate();
             return compound;

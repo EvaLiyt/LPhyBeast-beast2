@@ -1,0 +1,193 @@
+package lphybeast.spi;
+
+import beast.base.evolution.datatype.DataType;
+import jebl.evolution.sequences.SequenceType;
+import lphy.base.distribution.DiscretizedGamma;
+import lphy.base.distribution.RandomComposition;
+import lphy.base.distribution.Sample;
+import lphy.base.distribution.WeightedDirichlet;
+import lphy.base.evolution.DateToAge;
+import lphy.base.evolution.Mpileup;
+import lphy.base.evolution.SNPSampler;
+import lphy.base.evolution.alignment.FastaAlignment;
+import lphy.base.evolution.coalescent.PopulationFunctionCoalescent;
+import lphy.base.evolution.coalescent.populationmodel.ExponentialPopulationFunction;
+import lphy.base.evolution.datatype.Binary;
+import lphy.base.evolution.datatype.Continuous;
+import lphy.base.evolution.likelihood.MixturePhyloCTMC;
+import lphy.base.function.*;
+import lphy.base.function.alignment.*;
+import lphy.base.function.datatype.AminoAcidsFunction;
+import lphy.base.function.datatype.BinaryDatatypeFunction;
+import lphy.base.function.datatype.NucleotidesFunction;
+import lphy.base.function.datatype.StandardDatatypeFunction;
+import lphy.base.function.io.*;
+import lphy.base.function.taxa.*;
+import lphy.base.function.tree.ExtantTree;
+import lphy.base.function.tree.MigrationCount;
+import lphy.base.function.tree.NodeCount;
+import lphy.core.model.ExpressionNode;
+import lphy.core.model.Generator;
+import lphy.core.parser.function.ExpressionNodeWrapper;
+import lphy.core.parser.function.MapFunction;
+import lphy.core.parser.function.MethodCall;
+import lphy.core.simulator.Simulate;
+import lphy.core.vectorization.array.ArrayFunction;
+import lphy.core.vectorization.operation.ElementsAt;
+import lphy.core.vectorization.operation.Range;
+import lphy.core.vectorization.operation.RangeList;
+import lphybeast.GeneratorToBEAST;
+import lphybeast.ValueToBEAST;
+import lphybeast.tobeast.generators.*;
+import lphybeast.tobeast.values.*;
+
+import java.util.*;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * The "Container" provider class of SPI
+ * which include a list of {@link ValueToBEAST},
+ * {@link GeneratorToBEAST}, and {@link DataType}
+ * to extend.
+ * @author Walter Xie
+ */
+public class LPhyBEASTMappingImpl implements LPhyBEASTMapping {
+
+    // the first matching converter is used.
+    @Override
+    public List<Class<? extends ValueToBEAST>> getValuesToBEASTs() {
+        return Arrays.asList( DirichletValueToBEAST.class,     // SimplexParam (must precede generic Double[])
+                ExpMarkovChainValueToBEAST.class, // RealVectorParam<PositiveReal> (must precede generic Double[])
+                RandomCompositionValueToBEAST.class, // IntSimplexParam<PositiveInt> (must precede generic Integer[])
+                RandomBooleanArrayValueToBEAST.class, // BoolVectorParam (must precede generic Boolean[])
+                LogNormalValueToBEAST.class,     // RealScalarParam<PositiveReal> (must precede generic Double)
+                GammaValueToBEAST.class,         // RealScalarParam<PositiveReal>
+                InverseGammaValueToBEAST.class,  // RealScalarParam<PositiveReal>
+                ExpValueToBEAST.class,           // RealScalarParam<NonNegativeReal>
+                BetaValueToBEAST.class,          // RealScalarParam<UnitInterval>
+                NormalValueToBEAST.class,        // RealScalarParam<Real>
+                UniformValueToBEAST.class,       // RealScalarParam<Real>
+                PoissonValueToBEAST.class,       // IntScalarParam<NonNegativeInt>
+                WeightedDirichletValueToBEAST.class, // SimplexParam (must precede generic Double[])
+                DoubleArrayValueToBEAST.class,  // KeyRealParameter
+                IntegerArrayValueToBEAST.class, // KeyIntegerParameter
+                NumberArrayValueToBEAST.class,
+                CompoundVectorToBEAST.class, // TODO handle primitive CompoundVector properly
+                AlignmentToBEAST.class, // simulated alignment
+                TimeTreeToBEAST.class,
+                DoubleValueToBEAST.class,
+                DoubleArray2DValueToBEAST.class,
+                ExponentialToBEAST.class,
+                IntegerValueToBEAST.class,
+                BooleanArrayValueToBEAST.class,
+                BooleanValueToBEAST.class );
+    }
+
+    // the first matching converter is used.
+    @Override
+    public List<Class<? extends GeneratorToBEAST>> getGeneratorToBEASTs() {
+        return Arrays.asList( BernoulliMultiToBEAST.class, // cannot be replaced by IID
+                BetaToBEAST.class,
+                BinaryCovarionToBEAST.class, // language
+                BirthDeathSampleTreeDTToBEAST.class,
+                DirichletToBEAST.class,
+                ExpToBEAST.class,
+                F81ToBEAST.class,
+//                FossilBirthDeathTreeToBEAST.class,
+                GammaToBEAST.class,
+                GTRToDiscretePhylogeo.class,
+                HKYToBEAST.class,
+                IIDToBEAST.class,
+                InternalNodesIDToBEAST.class,
+                InverseGammaToBEAST.class,
+                JukesCantorToBEAST.class,
+                K80ToBEAST.class,
+                LocalBranchRatesToBEAST.class,
+                LogNormalToBEAST.class,
+//                MultispeciesCoalescentToStarBEAST2.class,
+                NormalToBEAST.class,
+                PhyloCTMCToBEAST.class,
+                PoissonToBEAST.class,
+                PopFuncCoalescentToBEAST.class,
+                RandomBooleanArrayToBEAST.class,
+                SerialCoalescentToBEAST.class,
+//                SimFBDAgeToBEAST.class,
+                // BICEPSToBEAST.class, // TODO: move to lphybeast-biceps extension
+                SkylineToBSP.class,
+//                SimulateToAlignments.class,
+//                StructuredCoalescentToMascot.class,
+                TreeLengthToBEAST.class,
+                TN93ToBEAST.class,
+                UCLNRelaxedClockToBEAST.class,
+                UniformToBEAST.class,
+                VectorizedDistributionToBEAST.class,
+                VectorizedFunctionToBEAST.class,
+                WAGToBEAST.class,
+                WeightedDirichletToBEAST.class,
+                YuleToBEAST.class, CalibratedYuleToBeast.class, LeafCalibrationsToBEAST.class,
+//                AutoCorrelatedClockToBEAST.class, AutoCorrelatedLogRatesToBEAST.class,CategoricalToBEAST.class,MixturePhyloCTMCToBEAST.class,
+                ExpMarkovChainToBEAST.class,
+                SliceDoubleArrayToBEAST.class );
+    }
+
+    // LPhy SequenceType => BEAST DataType
+    @Override
+    public Map<SequenceType, DataType> getDataTypeMap() {
+        Map<SequenceType, DataType> dataTypeMap = new ConcurrentHashMap<>();
+        dataTypeMap.put(SequenceType.NUCLEOTIDE, new beast.base.evolution.datatype.Nucleotide());
+        dataTypeMap.put(SequenceType.AMINO_ACID, new beast.base.evolution.datatype.Aminoacid());
+        dataTypeMap.put(Binary.getInstance(), new beast.base.evolution.datatype.Binary());
+        dataTypeMap.put(Continuous.getInstance(), new beastclassic.evolution.datatype.ContinuousDataType());
+        return dataTypeMap;
+    }
+
+    //*** these below are extra from Exclusion, only implemented in extensions ***//
+
+    @Override
+    public List<Class<? extends Generator>> getExcludedGenerator() {
+        return List.of(
+                ReadNexus.class, ReadFasta.class, WriteFasta.class, // IO
+                // Taxa and sites
+                NTaxaFunction.class, NCharFunction.class, TaxaFunction.class, CreateTaxa.class,
+                SpeciesTaxa.class, TaxaAgesFromFunction.class, RemoveTaxa.class,
+                CopySites.class, MissingSites.class, SelectSitesByMissingFraction.class, InvariableSites.class,
+                VariableSites.class, Distance.class, InformativeSites.class,
+                DiscretizedGamma.class, DateToAge.class,
+                // Tree
+                NodeCount.class, ExtractTrait.class, ExtantTree.class,
+                MigrationMatrix.class, MigrationCount.class, ReadTrees.class,
+                // distribution
+                WeightedDirichlet.class, SNPSampler.class,
+                // utils
+                MapFunction.class, ConcatArray.class, ARange.class, Range.class, RangeList.class,
+                ElementsAt.class, Rep.class, RepArray.class, Sort.class, Unique.class,
+                Get.class, Length.class, Select.class, Intersect.class,
+                RandomComposition.class, SumBoolean.class,
+                Union.class, Difference.class,
+                // sequence typs
+                NucleotidesFunction.class, StandardDatatypeFunction.class,
+                BinaryDatatypeFunction.class, AminoAcidsFunction.class,
+                // lphy
+                MethodCall.class, Simulate.class, Sample.class, ArrayFunction.class,
+                ExpressionNode.class, ExpressionNodeWrapper.class,
+                // io
+                ReadDelim.class, ReadMpileup.class, toDesignMatrix.class, Cbind.class,
+                // popfunc
+                ExponentialPopulationFunction.class, PopulationFunctionCoalescent.class
+        );
+    }
+
+    @Override
+    public List<Class> getExcludedValueType() {
+        // For a complex logic, or arrays, use isExcludedValue
+        return List.of(String.class, // ignore all String: d = nexus(file="Dengue4.nex");
+                HashMap.class, TreeMap.class,
+                FastaAlignment.class, // for fasta format
+                SequenceType.class, // ignore all data types
+                Mpileup.class
+        );
+    }
+
+
+}

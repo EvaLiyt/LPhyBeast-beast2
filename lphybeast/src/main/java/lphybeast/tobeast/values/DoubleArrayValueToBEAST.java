@@ -1,65 +1,67 @@
 package lphybeast.tobeast.values;
 
-import beast.base.core.BEASTInterface;
-import beast.base.core.Function;
-import beast.base.inference.parameter.Parameter;
-import beast.base.inference.parameter.RealParameter;
-import feast.function.Concatenate;
-import lphy.base.distribution.Dirichlet;
+import beast.base.spec.domain.NonNegativeReal;
+import beast.base.spec.domain.PositiveReal;
+import beast.base.spec.domain.Real;
+import beast.base.spec.domain.UnitInterval;
+import beast.base.spec.inference.parameter.RealVectorParam;
 import lphy.base.distribution.WeightedDirichlet;
+import lphy.core.model.GenerativeDistribution1D;
+import lphy.core.model.RandomVariable;
 import lphy.core.model.Value;
-import lphy.core.vectorization.VectorUtils;
+import lphy.core.vectorization.IID;
 import lphybeast.BEASTContext;
 import lphybeast.ValueToBEAST;
-import lphybeast.tobeast.operators.DefaultOperatorStrategy;
 
-import java.util.ArrayList;
-import java.util.List;
-
-public class DoubleArrayValueToBEAST implements ValueToBEAST<Double[], BEASTInterface> {
+public class DoubleArrayValueToBEAST implements ValueToBEAST<Double[], RealVectorParam> {
 
     @Override
-    public BEASTInterface valueToBEAST(Value<Double[]> value, BEASTContext context) {
+    public boolean match(Value value) {
+        // WeightedDirichlet handled by WeightedDirichletValueToBEAST (SimplexParam)
+        if (value.getGenerator() instanceof WeightedDirichlet) return false;
+        return value.value() instanceof Double[];
+    }
 
-        if (value.getGenerator() instanceof WeightedDirichlet) {
+    @Override
+    public RealVectorParam valueToBEAST(Value<Double[]> value, BEASTContext context) {
 
-            Concatenate concatenatedParameters = new Concatenate();
-            Double[] values = value.value();
+        Double[] vals = value.value();
+        double[] primitives = new double[vals.length];
+        for (int i = 0; i < vals.length; i++) primitives[i] = vals[i];
 
-            List<Function> args = new ArrayList<>();
-            for (int i = 0; i < values.length; i++) {
-                RealParameter parameter = BEASTContext.createRealParameter(value.getCanonicalId() + VectorUtils.INDEX_SEPARATOR + i, values[i]);
-                context.addStateNode(parameter, value, false);
-                args.add(parameter);
-            }
-            concatenatedParameters.setInputValue("arg", args);
-            concatenatedParameters.initAndValidate();
+        Real domain = inferDomain(value);
 
-            ValueToParameter.setID(concatenatedParameters, value);
+        RealVectorParam param = new RealVectorParam<>(primitives, domain);
 
-            DefaultOperatorStrategy.addDeltaExchangeOperator(value, args, context);
+        if (!(value instanceof RandomVariable))
+            param.setInputValue("estimate", false);
 
-            return concatenatedParameters;
+        param.setID(value.getCanonicalId());
+
+        return param;
+    }
+
+    private Real inferDomain(Value<Double[]> value) {
+        GenerativeDistribution1D<Double> gd1d = null;
+
+        if (value.getGenerator() instanceof GenerativeDistribution1D<?> gd) {
+            gd1d = (GenerativeDistribution1D<Double>) gd;
+        } else if (value.getGenerator() instanceof IID<?> iid
+                && iid.getBaseDistribution() instanceof GenerativeDistribution1D<?>) {
+            gd1d = (GenerativeDistribution1D<Double>) iid.getBaseDistribution();
         }
 
-        Double lower = null;
-        Double upper = null;
-        // check domain
-        if (value.getGenerator() instanceof Dirichlet) {
-            lower = 0.0;
-            upper = 1.0;
-        } else if (value.getGenerator() instanceof WeightedDirichlet) {
-            lower = 0.0;
-//        } else if (value.getGenerator() instanceof LogNormalMulti) {
-//            lower = 0.0;
+        if (gd1d != null) {
+            Double[] bounds = gd1d.getDomainBounds();
+            double lower = bounds[0];
+            double upper = bounds[1];
+
+            if (lower == 0.0 && upper == 1.0) return UnitInterval.INSTANCE;
+            if (lower == 0.0) return NonNegativeReal.INSTANCE;
+            if (lower > 0.0) return PositiveReal.INSTANCE;
         }
 
-        Parameter parameter = BEASTContext.createParameterWithBound(value, lower, upper, false);
-        if (!(parameter instanceof RealParameter))
-            throw new IllegalStateException("Expecting to create KeyRealParameter from " + value.getCanonicalId());
-
-        return (RealParameter) parameter;
-
+        return Real.INSTANCE;
     }
 
     @Override
@@ -68,8 +70,7 @@ public class DoubleArrayValueToBEAST implements ValueToBEAST<Double[], BEASTInte
     }
 
     @Override
-    public Class<BEASTInterface> getBEASTClass() {
-        return BEASTInterface.class;
+    public Class<RealVectorParam> getBEASTClass() {
+        return RealVectorParam.class;
     }
-
 }

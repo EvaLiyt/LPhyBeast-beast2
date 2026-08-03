@@ -5,13 +5,11 @@ import jebl.evolution.sequences.SequenceType;
 import lphy.core.model.Generator;
 import lphybeast.GeneratorToBEAST;
 import lphybeast.ValueToBEAST;
-import lphybeast.spi.LPhyBEASTExt;
+import lphybeast.spi.LPhyBEASTMapping;
 import mascot.lphybeast.tobeast.generators.GaussianRandomWalkToBEAST;
-import mascot.lphybeast.tobeast.generators.PoissonIndicatorsToBEAST;
+import mascot.lphybeast.tobeast.generators.StructuredCoalescentRateShiftsToGLM;
 import mascot.lphybeast.tobeast.generators.StructuredCoalescentSkylineToMascot;
 import mascot.lphybeast.tobeast.generators.StructuredCoalescentToMascot;
-import mascot.lphybeast.tobeast.generators.StructuredCoalescentToGLM;
-import mascot.lphybeast.tobeast.generators.StructuredCoalescentRateShiftsToGLM;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * to extend.
  * @author Walter Xie
  */
-public class MascotLBImpl implements LPhyBEASTExt {
+public class MascotLBImpl implements LPhyBEASTMapping {
 
     @Override
     public List<Class<? extends ValueToBEAST>> getValuesToBEASTs() {
@@ -39,8 +37,7 @@ public class MascotLBImpl implements LPhyBEASTExt {
                 StructuredCoalescentToMascot.class,
                 StructuredCoalescentRateShiftsToGLM.class,
                 StructuredCoalescentSkylineToMascot.class,
-                GaussianRandomWalkToBEAST.class,
-                PoissonIndicatorsToBEAST.class
+                GaussianRandomWalkToBEAST.class
         );
     }
 
@@ -56,7 +53,6 @@ public class MascotLBImpl implements LPhyBEASTExt {
 
     @Override
     public List<Class> getExcludedValueType() {
-        // For a complex logic, or arrays, use isExcludedValue
         return new ArrayList<>();
     }
 

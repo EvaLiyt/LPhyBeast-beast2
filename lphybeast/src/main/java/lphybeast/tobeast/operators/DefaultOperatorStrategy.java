@@ -2,33 +2,28 @@ package lphybeast.tobeast.operators;
 
 import beast.base.core.BEASTInterface;
 import beast.base.core.BEASTObject;
-import beast.base.core.Function;
-import beast.base.evolution.operator.AdaptableOperatorSampler;
 import beast.base.evolution.operator.Exchange;
 import beast.base.evolution.operator.TreeOperator;
-import beast.base.evolution.operator.kernel.BactrianScaleOperator;
 import beast.base.evolution.tree.Tree;
 import beast.base.inference.Operator;
+import beast.base.inference.Scalable;
 import beast.base.inference.StateNode;
-import beast.base.inference.operator.BitFlipOperator;
-import beast.base.inference.operator.IntRandomWalkOperator;
-import beast.base.inference.operator.kernel.BactrianDeltaExchangeOperator;
-import beast.base.inference.operator.kernel.BactrianRandomWalkOperator;
-import beast.base.inference.operator.kernel.BactrianUpDownOperator;
-import beast.base.inference.parameter.BooleanParameter;
-import beast.base.inference.parameter.IntegerParameter;
-import beast.base.inference.parameter.RealParameter;
+
+import beast.base.spec.evolution.operator.AdaptableOperatorSampler;
+import beast.base.spec.evolution.operator.UpDownOperator;
+import beast.base.spec.inference.operator.DeltaExchangeOperator;
+import beast.base.spec.inference.parameter.BoolVectorParam;
+import beast.base.spec.inference.parameter.IntSimplexParam;
+import beast.base.spec.inference.parameter.RealScalarParam;
+import beast.base.spec.inference.parameter.RealVectorParam;
+import beast.base.spec.inference.parameter.SimplexParam;
+import beast.base.spec.type.Tensor;
 import com.google.common.collect.Multimap;
-import feast.expressions.ExpCalculator;
-import lphy.base.distribution.Dirichlet;
-import lphy.base.distribution.RandomComposition;
 import lphy.base.distribution.WeightedDirichlet;
 import lphy.core.logger.LoggerUtils;
 import lphy.core.model.*;
-import lphy.core.vectorization.IID;
 import lphybeast.BEASTContext;
-import mutablealignment.MutableAlignment;
-import mutablealignment.MutableAlignmentOperator;
+import lphybeast.spi.OperatorContributor;
 
 import java.util.*;
 
@@ -51,31 +46,6 @@ public class DefaultOperatorStrategy implements OperatorStrategy {
     }
 
 
-    @Override
-    public Operator getScaleOperator() {
-        return new BactrianScaleOperator();
-    }
-
-    @Override
-    public Operator getDeltaExchangeOperator() {
-        return new BactrianDeltaExchangeOperator();
-    }
-
-    @Override
-    public Operator getRandomWalkOperator() {
-        return new BactrianRandomWalkOperator();
-    }
-
-    @Override
-    public Operator getIntRandomWalkOperator() {
-        return new IntRandomWalkOperator();
-    }
-
-    @Override
-    public Operator getBitFlipOperator() {
-        return new BitFlipOperator();
-    }
-
     /**
      * @return  a list of {@link Operator}.
      */
@@ -87,14 +57,20 @@ public class DefaultOperatorStrategy implements OperatorStrategy {
         Set<StateNode> skipOperators = context.getSkipOperators();
         for (StateNode stateNode : context.getState()) {
             if (!skipOperators.contains(stateNode)) {
-                // The default template to create operators
-                if (stateNode instanceof RealParameter realParameter) {
-                    Operator operator = createBEASTOperator(realParameter);
-                    if (operator != null) operators.add(operator);
-                } else if (stateNode instanceof IntegerParameter integerParameter) {
-                    operators.add(createBEASTOperator(integerParameter));
-                } else if (stateNode instanceof BooleanParameter booleanParameter) {
-                    operators.add(createBitFlipOperator(booleanParameter));
+                // beast3 spec types
+                if (stateNode instanceof SimplexParam simplex) {
+                    operators.add(createSimplexOperator(simplex));
+                } else if (stateNode instanceof IntSimplexParam<?> intSimplex) {
+                    operators.add(createIntSimplexOperator(intSimplex));
+                } else if (stateNode instanceof RealVectorParam<?> realVector) {
+                    // DeltaExchangeOperator takes priority: skip ScaleOperator if one is already
+                    // registered in extraOperators for this parameter (e.g. from WeightedDirichlet).
+                    if (!hasDeltaExchangeOperator(realVector, extraOperators))
+                        operators.add(createRealVectorOperator(realVector));
+                } else if (stateNode instanceof RealScalarParam<?> realScalar) {
+                    operators.add(createRealScalarOperator(realScalar));
+                } else if (stateNode instanceof BoolVectorParam boolVector) {
+                    operators.add(createBoolVectorOperator(boolVector));
                 } else if (stateNode instanceof Tree tree) {
                     TreeOperatorStrategy treeOperatorStrategy = context.resolveTreeOperatorStrategy(tree);
                     // create operators
@@ -107,14 +83,20 @@ public class DefaultOperatorStrategy implements OperatorStrategy {
                     List<Operator> noDuplicatedOperators = getNoDuplicatedOperators(treeOperators, extraOperators);
 
                     operators.addAll(noDuplicatedOperators);
-                } else if (stateNode instanceof MutableAlignment mutableAlignment) {
-                    MutableAlignmentOperator operator = new MutableAlignmentOperator();
-                    operator.setInputValue("mutableAlignment", mutableAlignment);
-                    operator.setInputValue("weight", getOperatorWeight(mutableAlignment.getTaxonCount()* mutableAlignment.getSiteCount()-1, 0.5));
-                    operator.initAndValidate();
-                    operator.setID("alignmentOperator");
-                    operators.add(operator);
-                    LoggerUtils.log.severe("Missing mutable alignment operator !");
+                } else {
+                    // Delegate to OperatorContributors (e.g., MutableAlignment from MA extension)
+                    boolean handled = false;
+                    for (OperatorContributor contributor : context.getOperatorContributors()) {
+                        if (contributor.canHandle(stateNode)) {
+                            operators.addAll(contributor.createOperators(stateNode, context));
+                            handled = true;
+                            break;
+                        }
+                    }
+                    if (!handled) {
+                        LoggerUtils.log.warning("No operator created for state node: " + stateNode.getID() +
+                                " of type " + stateNode.getClass().getSimpleName());
+                    }
                 }
             }
         }
@@ -167,56 +149,84 @@ public class DefaultOperatorStrategy implements OperatorStrategy {
     }
 
 
-    //*** parameter operators ***//
+    //*** beast3 spec parameter operators ***//
 
-    public Operator createBEASTOperator(RealParameter parameter) {
+    private Operator createSimplexOperator(SimplexParam simplex) {
+        var operator = new beast.base.spec.inference.operator.DeltaExchangeOperator();
+        operator.setInputValue("rvparameter", simplex);
+        operator.setInputValue("weight", getOperatorWeight(simplex.size() - 1));
+        operator.setInputValue("delta", 1.0 / simplex.size());
+        operator.initAndValidate();
+        operator.setID(simplex.getID() + ".deltaExchange");
         Multimap<BEASTInterface, GraphicalModelNode<?>> elements = context.getElements();
-        Collection<GraphicalModelNode<?>> nodes = elements.get(parameter);
-
-        if (nodes.stream().anyMatch(node -> node instanceof RandomVariable)) {
-
-            GraphicalModelNode graphicalModelNode = (GraphicalModelNode)nodes.stream().filter(node -> node instanceof RandomVariable).toArray()[0];
-
-            RandomVariable<?> variable = (RandomVariable<?>) graphicalModelNode;
-
-            Operator operator;
-            GenerativeDistribution generativeDistribution = variable.getGenerativeDistribution();
-
-            if (generativeDistribution instanceof Dirichlet ||
-                    (generativeDistribution instanceof IID &&
-                            ((IID<?>) generativeDistribution).getBaseDistribution() instanceof Dirichlet) ) {
-                Double[] value = (Double[]) variable.value();
-                operator = getDeltaExchangeOperator();
-                operator.setInputValue("parameter", parameter);
-                operator.setInputValue("weight", getOperatorWeight(parameter.getDimension() - 1));
-                operator.setInputValue("delta", 1.0 / value.length);
-                operator.initAndValidate();
-                operator.setID(parameter.getID() + ".deltaExchange");
-
-            } else if (supportNegativeValues(generativeDistribution)) {
-                // any distribution with support in negative values, e.g. Normal, Laplace.
-                operator = getRandomWalkOperator();
-                operator.setInputValue("parameter", parameter);
-                operator.setInputValue("weight", getOperatorWeight(parameter.getDimension()));
-                operator.setInputValue("scaleFactor", 0.75);
-                operator.initAndValidate();
-                operator.setID(parameter.getID() + ".randomWalk");
-
-            } else {
-                operator = getScaleOperator();
-                operator.setInputValue("parameter", parameter);
-                operator.setInputValue("weight", getOperatorWeight(parameter.getDimension()));
-                operator.setInputValue("scaleFactor", 0.75);
-                operator.initAndValidate();
-                operator.setID(parameter.getID() + ".scale");
-            }
-            elements.put(operator, null);
-            return operator;
-        } else {
-            LoggerUtils.log.severe("No LPhy random variable associated with beast state node " + parameter.getID());
-            return null;
-        }
+        elements.put(operator, null);
+        return operator;
     }
+
+    private Operator createIntSimplexOperator(IntSimplexParam<?> intSimplex) {
+        var operator = new beast.base.spec.inference.operator.DeltaExchangeOperator();
+        operator.setInputValue("ivparameter", intSimplex);
+        operator.setInputValue("weight", getOperatorWeight(intSimplex.size() - 1));
+        operator.setInputValue("delta", 2.0);
+        operator.setInputValue("integer", true);
+        operator.initAndValidate();
+        operator.setID(intSimplex.getID() + ".deltaExchange");
+        Multimap<BEASTInterface, GraphicalModelNode<?>> elements = context.getElements();
+        elements.put(operator, null);
+        return operator;
+    }
+
+    private Operator createRealVectorOperator(RealVectorParam<?> realVector) {
+        var operator = new beast.base.spec.inference.operator.ScaleOperator();
+        operator.setInputValue("parameter", realVector);
+        operator.setInputValue("weight", getOperatorWeight(realVector.size()));
+        operator.setInputValue("scaleFactor", 0.75);
+        operator.initAndValidate();
+        operator.setID(realVector.getID() + ".scale");
+        Multimap<BEASTInterface, GraphicalModelNode<?>> elements = context.getElements();
+        elements.put(operator, null);
+        return operator;
+    }
+
+    private Operator createRealScalarOperator(RealScalarParam<?> realScalar) {
+        var operator = new beast.base.spec.inference.operator.ScaleOperator();
+        operator.setInputValue("parameter", realScalar);
+        operator.setInputValue("weight", getOperatorWeight(1));
+        operator.setInputValue("scaleFactor", 0.75);
+        operator.initAndValidate();
+        operator.setID(realScalar.getID() + ".scale");
+        Multimap<BEASTInterface, GraphicalModelNode<?>> elements = context.getElements();
+        elements.put(operator, null);
+        return operator;
+    }
+
+    private Operator createBoolVectorOperator(BoolVectorParam boolVector) {
+        var operator = new beast.base.spec.inference.operator.BitFlipOperator();
+        operator.setInputValue("parameter", boolVector);
+        operator.setInputValue("weight", getOperatorWeight(boolVector.size()));
+        operator.initAndValidate();
+        operator.setID(boolVector.getID() + ".bitFlip");
+        Multimap<BEASTInterface, GraphicalModelNode<?>> elements = context.getElements();
+        elements.put(operator, null);
+        return operator;
+    }
+
+    /**
+     * Returns true if a {@link DeltaExchangeOperator} targeting {@code param} already exists
+     * in {@code extraOperators}. Used to prevent a redundant {@link beast.base.spec.inference.operator.ScaleOperator}
+     * from being created for the same parameter.
+     * <p>
+     * Note: it is assumed that any parameter assigned a {@link DeltaExchangeOperator} is a
+     * {@link RealVectorParam}, because the operator works on a vector whose elements are
+     * individually represented as scalars summing to a constrained total.
+     */
+    private boolean hasDeltaExchangeOperator(RealVectorParam<?> param, List<Operator> extraOperators) {
+        return extraOperators.stream()
+                .anyMatch(op -> op instanceof DeltaExchangeOperator deltaOp
+                        && param.equals(deltaOp.getInput("rvparameter").get()));
+    }
+
+    //*** static methods ***//
 
     // for RandomWalkOperator
     public static boolean supportNegativeValues(GenerativeDistribution generativeDistribution) {
@@ -230,55 +240,12 @@ public class DefaultOperatorStrategy implements OperatorStrategy {
         return false;
     }
 
-    public Operator createBEASTOperator(IntegerParameter parameter) {
-        Map<BEASTInterface, GraphicalModelNode<?>> BEASTToLPHYMap = context.getBEASTToLPHYMap();
-        // TODO safe cast?
-        RandomVariable<?> variable = (RandomVariable<?>) BEASTToLPHYMap.get(parameter);
-
-        Operator operator;
-        if (variable.getGenerativeDistribution() instanceof RandomComposition) {
-            System.out.println("Constructing operator for randomComposition");
-
-            operator = getDeltaExchangeOperator();
-            operator.setInputValue("intparameter", parameter);
-            operator.setInputValue("weight", getOperatorWeight(parameter.getDimension() - 1));
-            operator.setInputValue("delta", 2.0);
-            operator.setInputValue("integer", true);
-            operator.initAndValidate();
-            operator.setID(parameter.getID() + ".deltaExchange");
-        } else {
-            operator = getIntRandomWalkOperator();
-            operator.setInputValue("parameter", parameter);
-            operator.setInputValue("weight", getOperatorWeight(parameter.getDimension()));
-
-            // TODO implement an optimizable int random walk that uses a reflected Poisson distribution for the jump size with the mean of the Poisson being the optimizable parameter
-            operator.setInputValue("windowSize", 1);
-            operator.initAndValidate();
-            operator.setID(parameter.getID() + ".randomWalk");
-        }
-        Multimap<BEASTInterface, GraphicalModelNode<?>> elements = context.getElements();
-        elements.put(operator, null);
-        return operator;
-    }
-
-    private Operator createBitFlipOperator(BooleanParameter parameter) {
-        Operator operator = getBitFlipOperator();
-        operator.setInputValue("parameter", parameter);
-        operator.setInputValue("weight", getOperatorWeight(parameter.getDimension()));
-        operator.initAndValidate();
-        operator.setID(parameter.getID() + ".bitFlip");
-
-        return operator;
-    }
-
-    //*** static methods ***//
-
     // when both mu and tree are random var
     public static void addUpDownOperator(Tree tree, StateNode clockRate, BEASTContext context) {
         String idStr = clockRate.getID() + "Up" + tree.getID() + "DownOperator";
         // avoid to duplicate updown ops from the same pair of rate and tree
         if (!context.hasExtraOperator(idStr)) {
-            Operator upDownOperator = new BactrianUpDownOperator();
+            Operator upDownOperator = new UpDownOperator();
             upDownOperator.setID(idStr);
             upDownOperator.setInputValue("up", clockRate);
             upDownOperator.setInputValue("down", tree);
@@ -288,22 +255,32 @@ public class DefaultOperatorStrategy implements OperatorStrategy {
         }
     }
 
-    // This is used when clockRate is computed by ExpCalculator
-    public static void addUpDownOperator(Tree tree, ExpCalculator clockRate, BEASTContext context) {
-        String idStr = clockRate.getID() + "Up" + tree.getID() + "DownOperator";
+    /**
+     * Add an up-down operator when the clock rate is computed by an expression
+     * (e.g., ExpCalculator from feast). The arguments are scaled upward against the tree.
+     *
+     * @param tree       the tree to scale down
+     * @param upArgs     the arguments to scale up
+     * @param expression the expression BEASTInterface (for ID)
+     * @param context    the BEAST context
+     */
+    public static void addUpDownOperator(Tree tree, List<? extends Tensor> upArgs, BEASTInterface expression, BEASTContext context) {
+        String idStr = expression.getID() + "Up" + tree.getID() + "DownOperator";
         // avoid to duplicate updown ops from the same pair of rate and tree
         if (!context.hasExtraOperator(idStr)) {
-            Operator upDownOperator = new BactrianUpDownOperator();
+            Operator upDownOperator = new UpDownOperator();
             upDownOperator.setID(idStr);
 
-            List<Function> args = clockRate.functionsInput.get();
-            for (Function function : args) {
-                upDownOperator.setInputValue("up", function);
+            for (Tensor arg : upArgs) {
+                if (arg instanceof Scalable) {
+                    upDownOperator.setInputValue("up", arg);
+                } else {
+                    LoggerUtils.log.warning("Cannot add " + arg + " to up-down operator: not Scalable");
+                }
             }
-            LoggerUtils.log.warning("The clock rate is computed as " +
-                    clockRate.expressionInput.get() +
-                    ", where all arguments are assumed to scale upward in the up–down operator !");
-//            upDownOperator.setInputValue("up", clockRate);
+            LoggerUtils.log.warning("The clock rate is computed by expression " +
+                    expression.getID() +
+                    ", where all arguments are assumed to scale upward in the up-down operator !");
             upDownOperator.setInputValue("down", tree);
             upDownOperator.setInputValue("scaleFactor", 0.9);
             upDownOperator.setInputValue("weight", BEASTContext.getOperatorWeight(tree.getInternalNodeCount()+1));
@@ -311,14 +288,14 @@ public class DefaultOperatorStrategy implements OperatorStrategy {
         }
     }
 
-    public static void addDeltaExchangeOperator(Value<Double[]> value, List<Function> args, BEASTContext context) {
+    public static void addDeltaExchangeOperator(Value<Double[]> value, RealVectorParam<?> param, BEASTContext context) {
         WeightedDirichlet weightedDirichlet = (WeightedDirichlet) value.getGenerator();
-        IntegerParameter weightIntParam = context.getAsIntegerParameter(weightedDirichlet.getWeights());
+        BEASTInterface weightsObj = context.getBEASTObject(weightedDirichlet.getWeights());
 
-        Operator operator = new BactrianDeltaExchangeOperator();
-        operator.setInputValue("parameter", args);
-        operator.setInputValue("weight", BEASTContext.getOperatorWeight(args.size() - 1));
-        operator.setInputValue("weightvector", weightIntParam);
+        DeltaExchangeOperator operator = new DeltaExchangeOperator();
+        operator.setInputValue("rvparameter", param);
+        operator.setInputValue("weight", BEASTContext.getOperatorWeight(param.size() - 1));
+        operator.setInputValue("weightvector", weightsObj);
         operator.setInputValue("delta", 1.0 / value.value().length);
         operator.initAndValidate();
         operator.setID(value.getCanonicalId() + ".deltaExchange");

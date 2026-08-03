@@ -6,24 +6,19 @@ import beast.base.core.Loggable;
 import beast.base.evolution.alignment.Alignment;
 import beast.base.evolution.alignment.Taxon;
 import beast.base.evolution.datatype.DataType;
-import beast.base.evolution.likelihood.GenericTreeLikelihood;
-import beast.base.evolution.substitutionmodel.Frequencies;
+import beast.base.spec.evolution.likelihood.GenericTreeLikelihood;
+
 import beast.base.evolution.tree.Tree;
 import beast.base.evolution.tree.TreeInterface;
 import beast.base.inference.*;
-import beast.base.inference.distribution.ParametricDistribution;
-import beast.base.inference.distribution.Prior;
-import beast.base.inference.parameter.IntegerParameter;
-import beast.base.inference.parameter.Parameter;
-import beast.base.inference.parameter.RealParameter;
 import beast.base.parser.XMLProducer;
-import beastlabs.core.util.Slice;
-import beastlabs.util.BEASTVector;
+import beast.base.spec.inference.parameter.VectorElement;
+import beast.base.spec.type.RealVector;
+import beast.base.spec.type.Tensor;
+import lphybeast.util.BEASTVector;
+import lphybeast.tobeast.VectorSlice;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Multimap;
-import coupledMCMC.CoupledMCMC;
-import feast.expressions.ExpCalculator;
-import feast.function.Concatenate;
 import jebl.evolution.sequences.SequenceType;
 import lphy.core.logger.LoggerUtils;
 import lphy.core.model.*;
@@ -35,7 +30,7 @@ import lphy.core.vectorization.VectorUtils;
 import lphy.core.vectorization.VectorizedRandomVariable;
 import lphy.core.vectorization.operation.ElementsAt;
 import lphy.core.vectorization.operation.SliceValue;
-import lphybeast.spi.LPhyBEASTExt;
+import lphybeast.spi.*;
 import lphybeast.tobeast.loggers.LoggerFactory;
 import lphybeast.tobeast.loggers.LoggerHelper;
 import lphybeast.tobeast.operators.DefaultOperatorStrategy;
@@ -115,6 +110,8 @@ public class BEASTContext {
 
     // required
     final private LPhyBeastConfig lPhyBeastConfig;
+    // cached loader for SPI access
+    private LPhyBEASTLoader loader;
 
     @Deprecated
     public BEASTContext(LPhyParserDictionary parserDictionary, LPhyBeastConfig lPhyBeastConfig) {
@@ -133,6 +130,7 @@ public class BEASTContext {
         this.parserDictionary = parserDictionary;
         if (loader == null)
             loader = LPhyBEASTLoader.getInstance();
+        this.loader = loader;
         this.lPhyBeastConfig = lPhyBeastConfig;
 
         valueToBEASTList = loader.valueToBEASTList;
@@ -145,8 +143,99 @@ public class BEASTContext {
         newTreeOperatorStrategies = loader.newTreeOperatorStrategies;
     }
 
+    //*** SPI accessors ***//
+
+    public List<ValueHandler> getValueHandlers() {
+        return loader.valueHandlers;
+    }
+
+    public List<TreeLikelihoodStrategy> getTreeLikelihoodStrategies() {
+        return loader.treeLikelihoodStrategies;
+    }
+
+    public List<OperatorContributor> getOperatorContributors() {
+        return loader.operatorContributors;
+    }
+
+    public List<ClockOperatorContributor> getClockOperatorContributors() {
+        return loader.clockOperatorContributors;
+    }
+
+    public List<AlignmentHandler> getAlignmentHandlers() {
+        return loader.alignmentHandlers;
+    }
+
+    /**
+     * Resolve the MCMCStrategy to use. If MC3 is requested, find an MC3 strategy
+     * from extensions. Otherwise use the default.
+     */
+    private MCMCStrategy resolveMCMCStrategy() {
+        if (lPhyBeastConfig.isUseMC3()) {
+            for (MCMCStrategy strategy : loader.mcmcStrategies) {
+                if (strategy.isMC3()) return strategy;
+            }
+            throw new UnsupportedOperationException(
+                    "MC3 (Coupled MCMC) requested but no MC3 strategy found. " +
+                    "Install the lphybeast-mc3 extension package.");
+        }
+        // Return first non-MC3 strategy, or the default
+        for (MCMCStrategy strategy : loader.mcmcStrategies) {
+            if (!strategy.isMC3()) return strategy;
+        }
+        return new DefaultMCMCStrategy();
+    }
+
+    /**
+     * Ask registered ValueHandlers if beastInterface is a function expression.
+     * @return the Function, or null if no handler recognizes it
+     */
+//    public Function valueHandlerAsFunction(BEASTInterface beastInterface) {
+//        for (ValueHandler handler : getValueHandlers()) {
+//            Function f = handler.asFunction(beastInterface);
+//            if (f != null) return f;
+//        }
+//        return null;
+//    }
+
+    /**
+     * Ask registered ValueHandlers to extract parts from a compound value.
+     * @return the parts, or null if no handler recognizes it
+     */
+    public List<BEASTInterface> valueHandlerExtractParts(BEASTInterface beastInterface) {
+        for (ValueHandler handler : getValueHandlers()) {
+            List<BEASTInterface> parts = handler.extractParts(beastInterface);
+            if (parts != null) return parts;
+        }
+        return null;
+    }
+
+    /**
+     * Ask registered ValueHandlers to extract state nodes from a compound value.
+     * @return the state nodes, or null if no handler recognizes it
+     */
+    public List<StateNode> valueHandlerExtractStateNodes(BEASTInterface beastInterface) {
+        for (ValueHandler handler : getValueHandlers()) {
+            List<StateNode> nodes = handler.extractStateNodes(beastInterface);
+            if (nodes != null) return nodes;
+        }
+        return null;
+    }
+
+    /**
+     * Ask registered ValueHandlers to extract arguments from an expression (e.g., ExpCalculator).
+     * @return the arguments, or null if no handler recognizes it
+     */
+    public List<? extends Tensor> valueHandlerExtractArguments(BEASTInterface beastInterface) {
+        for (ValueHandler handler : getValueHandlers()) {
+            List<? extends Tensor> args = handler.extractArguments(beastInterface);
+            if (args != null) return args;
+        }
+        return null;
+    }
+
     /**
      * Main method to process configurations to create BEAST 2 XML from LPhy objects.
+     * Uses {@link MCMCStrategy} to create either standard MCMC or MC3 run element.
      *
      * @param logFileStem  log file stem
      * @return BEAST 2 XML in String
@@ -180,227 +269,76 @@ public class BEASTContext {
         return new XMLProducer().toXML(mcmc, elements.keySet());
     }
 
+
+
+
     /**
-     * Similar to {@link #toBEASTXML}, but sets up an MC³ chain (Metropolis-coupled MCMC),
-     * which runs multiple chains at different temperatures for improved mixing.
-     * @param logFileStem  log file stem (no extension)
-     * @return             XML string configured for MC³
+     * Returns the spec RealScalar for this value, coercing from IntScalarParam if needed.
      */
-
-    public String toBEASTXML_MC3(final String logFileStem) {
-
-        long chainLength = lPhyBeastConfig.getChainLength();
-        long logEvery = lPhyBeastConfig.getLogEvery();
-        int preBurnin = lPhyBeastConfig.getPreBurnin();
-
-        if (chainLength < NUM_OF_SAMPLES) {
-            throw new IllegalArgumentException("Invalid length for MC3 chain, len = " + chainLength);
+    public beast.base.spec.type.RealScalar<?> getAsRealScalar(Value value) {
+        Object obj = beastObjects.get(value);
+        if (obj instanceof beast.base.spec.type.RealScalar<?> rs) return rs;
+        if (obj instanceof beast.base.spec.inference.parameter.IntScalarParam<?> isp) {
+            var scalar = new beast.base.spec.inference.parameter.RealScalarParam<>(
+                    (double) isp.get(), beast.base.spec.domain.Real.INSTANCE);
+            scalar.setID(isp.getID());
+            removeBEASTObject((BEASTInterface) isp);
+            addToContext(value, scalar);
+            return scalar;
         }
-
-        int nsamp = toIntExact(chainLength / logEvery);
-        if (nsamp < NUM_OF_SAMPLES/2) {
-            LoggerUtils.log.warning("The number of logged sample (" + nsamp + ") is too small ! Prefer " + NUM_OF_SAMPLES);
-        }
-
-        createBEASTObjects();
-        assert state.size() > 0;
-
-        if (preBurnin < 0) {
-            preBurnin = getAllStatesSize(state) * 10;
-        }
-
-        LoggerUtils.log.info("Set MC3 chain length = " + chainLength + ", log every = "
-                + logEvery + ", samples = " + NUM_OF_SAMPLES + ", preBurnin = " + preBurnin);
-
-
-        CoupledMCMC mc3 = createMC3(chainLength, logEvery, logFileStem, preBurnin);
-
-        return new XMLProducer().toXML(mc3, elements.keySet());
-    }
-
-
-
-    //*** BEAST 2 Parameters ***//
-
-    public static RealParameter createRealParameter(Double[] value) {
-        return new RealParameter(value);
-    }
-
-    public static RealParameter createRealParameter(double value) {
-        return createRealParameter(null, value);
-    }
-
-    public static IntegerParameter createIntegerParameter(String id, int value) {
-        IntegerParameter parameter = new IntegerParameter();
-        parameter.setInputValue("value", value);
-        parameter.initAndValidate();
-        if (id != null) parameter.setID(id);
-
-        return parameter;
-    }
-
-    public static IntegerParameter createIntegerParameter(String id, Integer[] value) {
-        IntegerParameter parameter = new IntegerParameter();
-        parameter.setInputValue("value", Arrays.asList(value));
-        parameter.initAndValidate();
-        if (id != null) parameter.setID(id);
-
-        return parameter;
-    }
-
-    public static RealParameter createRealParameter(String id, double value) {
-        RealParameter parameter = new RealParameter();
-        parameter.setInputValue("value", value);
-        parameter.initAndValidate();
-        if (id != null) parameter.setID(id);
-
-        return parameter;
-    }
-
-    public static RealParameter createRealParameter(String id, Double[] value) {
-        RealParameter parameter = new RealParameter();
-        parameter.setInputValue("value", Arrays.asList(value));
-        parameter.initAndValidate();
-        if (id != null) parameter.setID(id);
-
-        return parameter;
+        throw new RuntimeException("No coercible RealScalar found for " + value + " (got " + obj.getClass().getSimpleName() + ")");
     }
 
     /**
-     * @param value    IntegerArray/DoubleArray, and set estimate="false" for values that are not RandomVariables.
-     * @param lower    Number, can be null
-     * @param upper    Number, can be null
-     * @param forceToDouble  if true, it will ignore whether component type is Integer or not,
-     *                       and always return RealParameter.
-     * @return        A {@link IntegerParameter} or {@link RealParameter}
-     *                given bounds and array values based on the type of values.
+     * Returns a spec RealVector for this value, coercing from IntVectorParam if needed.
      */
-    public static Parameter<? extends Number> createParameterWithBound(
-            Value<? extends Number[]> value, Number lower, Number upper, boolean forceToDouble) {
-
-        Parameter.Base parameter;
-
-        // forceToDouble will ignore whether component type is Integer or not
-        if ( !forceToDouble &&
-                Objects.requireNonNull(value).getType().getComponentType().isAssignableFrom(Integer.class) ) {
-
-            parameter = new IntegerParameter();
-
-            if (lower != null)
-                parameter.setInputValue("lower", lower.intValue());
-            if (upper != null)
-                parameter.setInputValue("upper", upper.intValue());
-
-        } else { // Double and Number
-            parameter = new RealParameter();
-
-            if (lower != null)
-                parameter.setInputValue("lower", lower.doubleValue());
-            if (upper != null)
-                parameter.setInputValue("upper", upper.doubleValue());
+    public beast.base.spec.type.RealVector<?> getAsRealVector(Value value) {
+        Object obj = beastObjects.get(value);
+        if (obj instanceof beast.base.spec.type.RealVector<?> rv) return rv;
+        if (obj instanceof beast.base.spec.inference.parameter.IntVectorParam ivp) {
+            double[] values = new double[ivp.size()];
+            for (int i = 0; i < values.length; i++) values[i] = ivp.get(i);
+            var vec = new beast.base.spec.inference.parameter.RealVectorParam<>(values, beast.base.spec.domain.Real.INSTANCE);
+            vec.setID(ivp.getID());
+            vec.setInputValue("estimate", false);
+            removeBEASTObject(ivp);
+            addToContext(value, vec);
+            return vec;
         }
-
-        List<Number> values = Arrays.asList(value.value());
-        parameter.setInputValue("value", values);
-        parameter.setInputValue("dimension", values.size());
-
-        // set estimate="false" for IntegerArray/DoubleArray values that are not RandomVariables.
-        if (!(value instanceof RandomVariable))
-            parameter.setInputValue("estimate", false);
-
-        parameter.initAndValidate();
-        ValueToParameter.setID(parameter, value);
-
-        return parameter;
+        throw new RuntimeException("No coercible RealVector found for " + value + " (got " + obj.getClass().getSimpleName() + ")");
     }
 
     /**
-     * This is used to handle {@link ExpressionNode},
-     * and then pass value to {@link #getAsRealParameter} if it is not generated by expressions.
-     * @param value   LPhy {@link Value}
-     * @return  {@link Function}
+     * returns a spec Tensor for this value, accepting sepc RealScalar and sepc RealVector, coercing from Int params if needed.
      */
-    public Function getAsFunctionOrRealParameter(Value value) {
-        BEASTInterface beastInterface = beastObjects.get(value);
-        if (beastInterface == null) {
-            // value is generated by ExpressionNode
-            if (value.getGenerator() instanceof ExpressionNode expressionNode) {
-                beastInterface = beastObjects.get(expressionNode);
-                if (beastInterface instanceof Function function) {
-                    addToContext(value, beastInterface);
-                    return function;
-                }
-            }
-        } else if (beastInterface instanceof ExpCalculator expCalculator)
-            return expCalculator;
-
-        return getAsRealParameter(value);
-    }
-
-    /**
-     * This function will retrieve the beast object for this value and return it if it is a RealParameter,
-     * or convert it to a RealParameter if it is an IntegerParameter and replace the original integer parameter in the relevant stores.
-     *
-     * @param value
-     * @return the RealParameter associated with this value if it exists, or can be coerced. Has a side-effect if coercion occurs.
-     */
-    public RealParameter getAsRealParameter(Value value) {
-        Parameter param = (Parameter) beastObjects.get(value);
-
-        if (param instanceof RealParameter) return (RealParameter) param;
-        if (param instanceof IntegerParameter) {
-            if (param.getDimension() == 1) {
-
-                RealParameter newParam = createRealParameter(param.getID(), ((IntegerParameter) param).getValue());
-                removeBEASTObject((BEASTInterface) param);
-                addToContext(value, newParam);
-                return newParam;
-            } else {
-                Double[] values = new Double[param.getDimension()];
-                for (int i = 0; i < values.length; i++) {
-                    values[i] = ((IntegerParameter) param).getValue(i).doubleValue();
-                }
-
-                RealParameter newParam = createRealParameter(param.getID(), values);
-                removeBEASTObject((BEASTInterface) param);
-                addToContext(value, newParam);
-                return newParam;
-
-            }
+    public beast.base.spec.type.Tensor<? extends beast.base.spec.domain.Real, Double> getAsRealTensor(Value value) {
+        Object obj = beastObjects.get(value);
+        if (obj instanceof beast.base.spec.type.RealScalar<?> rs) return rs;
+        if (obj instanceof beast.base.spec.type.RealVector<?> rv) return rv;
+        if (obj instanceof beast.base.spec.inference.parameter.IntScalarParam<?> isp) {
+            var scalar = new beast.base.spec.inference.parameter.RealScalarParam<>(
+                    (double) isp.get(), beast.base.spec.domain.Real.INSTANCE);
+            scalar.setID(isp.getID());
+            removeBEASTObject((BEASTInterface) isp);
+            addToContext(value, scalar);
+            return scalar;
         }
-        throw new RuntimeException("No coercible parameter found for " + value);
-    }
-
-    public IntegerParameter getAsIntegerParameter(Value value) {
-        Parameter param = (Parameter) beastObjects.get(value);
-        if (param instanceof IntegerParameter) return (IntegerParameter) param;
-        if (param instanceof RealParameter) {
-            if (param.getDimension() == 1) {
-
-                IntegerParameter newParam = createIntegerParameter(param.getID(), (int) Math.round(((RealParameter) param).getValue()));
-                removeBEASTObject((BEASTInterface) param);
-                addToContext(value, newParam);
-                return newParam;
-            } else {
-                Integer[] values = new Integer[param.getDimension()];
-                for (int i = 0; i < values.length; i++) {
-                    values[i] = ((RealParameter) param).getValue(i).intValue();
-                }
-
-                IntegerParameter newParam = createIntegerParameter(param.getID(), values);
-                removeBEASTObject((BEASTInterface) param);
-                addToContext(value, newParam);
-                return newParam;
-
-            }
+        if (obj instanceof beast.base.spec.inference.parameter.IntVectorParam ivp) {
+            double[] values = new double[ivp.size()];
+            for (int i = 0; i < values.length; i++) values[i] = ivp.get(i);
+            var vec = new beast.base.spec.inference.parameter.RealVectorParam<>(values, beast.base.spec.domain.Real.INSTANCE);
+            vec.setID(ivp.getID());
+            vec.setInputValue("estimate", false);
+            removeBEASTObject(ivp);
+            addToContext(value, vec);
+            return vec;
         }
-        throw new RuntimeException("No coercible parameter found for " + value);
+        throw new RuntimeException("No coercible RealTensor found for " + value + " (got " + obj.getClass().getSimpleName() + ")");
     }
 
     //*** handle BEAST 2 objects ***//
 
     /**
-     * Note: if return RealParameter, must use {@link #getAsRealParameter} not getBEASTObject.
      * @param node  LPhy object
      * @return      the beast object mapped to the given LPhy object
      */
@@ -439,9 +377,9 @@ public class BEASTContext {
             String[] parts = id.split(VectorUtils.INDEX_SEPARATOR);
             if (parts.length == 2) {
                 int index = Integer.parseInt(parts[1]);
-                Slice slice = createSliceFromVector(node, parts[0], index);
-                beastObjects.put(node, slice);
-                return slice;
+                VectorElement<?> element = createVectorElementFromVector(node, parts[0], index);
+                beastObjects.put(node, element);
+                return element;
             }
         }
 
@@ -463,14 +401,14 @@ public class BEASTContext {
         return null;
     }
 
-    public Slice createSliceFromVector(GraphicalModelNode node, String id, int index) {
+    public VectorElement<?> createVectorElementFromVector(GraphicalModelNode node, String id, int index) {
 
         BEASTInterface parentNode = getBEASTObject(Symbols.getCanonical(id));
 
-        Slice slice = SliceFactory.createSlice(parentNode, index,
-                Symbols.getCanonical(id) + VectorUtils.INDEX_SEPARATOR + index);
-        addToContext(node, slice);
-        return slice;
+        VectorElement<?> element = new VectorElement<>((RealVector) parentNode, index);
+        element.setID(Symbols.getCanonical(id) + VectorUtils.INDEX_SEPARATOR + index);
+        addToContext(node, element);
+        return element;
 
     }
 
@@ -486,20 +424,12 @@ public class BEASTContext {
 
         BEASTInterface slicedBEASTValue = beastObjects.get(sliceValue.getSlicedValue());
 
-
         if (slicedBEASTValue != null) {
-            if (!(slicedBEASTValue instanceof Concatenate)) {
-                String id = lPhyBeastConfig.isLogUnicode() ? sliceValue.getId() : sliceValue.getCanonicalId();
-                Slice slice = SliceFactory.createSlice(slicedBEASTValue, sliceValue.getIndex(), id);
-                addToContext(sliceValue, slice);
-                return slice;
-            } else {
-                // handle by concatenating
-                List<Function> parts = ((Concatenate) slicedBEASTValue).functionsInput.get();
-                Function slice = parts.get(sliceValue.getIndex());
-                addToContext(sliceValue, (BEASTInterface) slice);
-                return (BEASTInterface) slice;
-            }
+            String id = lPhyBeastConfig.isLogUnicode() ? sliceValue.getId() : sliceValue.getCanonicalId();
+            VectorElement<?> element = new VectorElement<>((RealVector) slicedBEASTValue, sliceValue.getIndex());
+            element.setID(id);
+            addToContext(sliceValue, element);
+            return element;
         } else return null;
     }
 
@@ -617,112 +547,31 @@ public class BEASTContext {
     }
 
     /**
-     * The main class to init BEAST 2 MCMC
+     * Create the MCMC run element using the resolved {@link MCMCStrategy}.
      */
     private MCMC createMCMC(long chainLength, long logEvery, String logFileStem, int preBurnin, boolean sampleFromPrior) {
 
         CompoundDistribution posterior = createBEASTPosterior();
 
-        MCMC mcmc = new MCMC();
-        mcmc.setInputValue("distribution", posterior);
-        mcmc.setInputValue("chainLength", chainLength);
-
-        // TODO eventually all operator related code should go there
-        // create XML operator section, with the capability to replace default operators
+        // create operators
         OperatorStrategy operatorStrategy = new DefaultOperatorStrategy(this);
-        // create all operators, where tree operators strategy can be changed in an extension.
         List<Operator> operators = operatorStrategy.createOperators();
-        for (int i = 0; i < operators.size(); i++) {
-            System.out.println(operators.get(i));
-        }
-        mcmc.setInputValue("operator", operators);
 
-        // TODO eventually all logging related code should go there
-        // create XML logger section
+        // create loggers
         topDist = createTopCompoundDist();
         LoggerFactory loggerFactory = new LoggerFactory(this, topDist);
-        // 3 default loggers: parameter logger, screen logger, tree logger.
         List<Logger> loggers = loggerFactory.createLoggers(logEvery, logFileStem);
-        // extraLoggers processed in LoggerFactory
-        mcmc.setInputValue("logger", loggers);
 
-        State state = new State();
-        state.setInputValue("stateNode", this.state);
-        state.initAndValidate();
-        elements.put(state, null);
+        // create state
+        State beastState = new State();
+        beastState.setInputValue("stateNode", this.state);
+        beastState.initAndValidate();
+        elements.put(beastState, null);
 
-        // TODO make sure the stateNode list is being correctly populated
-        mcmc.setInputValue("state", state);
-
-        if (inits.size() > 0) mcmc.setInputValue("init", inits);
-
-        if (preBurnin > 0)
-            mcmc.setInputValue("preBurnin", preBurnin);
-
-        mcmc.initAndValidate();
-        if (sampleFromPrior){
-            mcmc.setInputValue("sampleFromPrior", sampleFromPrior);
-        }
-
-        return mcmc;
-    }
-
-    // ----- MC3 Construction -----
-    /**
-     * Builds the {@link CoupledMCMC} object for multiple chains at different temperatures.
-     * This method sets the chain count, temperature increment, and other MC³ parameters.
-     */
-    private CoupledMCMC createMC3(long chainLength, long logEvery, String logFileStem, int preBurnin) {
-
-        CompoundDistribution posterior = createBEASTPosterior();
-
-        CoupledMCMC mc3 = new CoupledMCMC();
-        mc3.setID("mcmcmc");
-
-        mc3.setInputValue("distribution", posterior);
-        mc3.setInputValue("chainLength", chainLength);
-
-        // mc3 inputs here
-        mc3.setInputValue("chains",          lPhyBeastConfig.getChains());
-        mc3.setInputValue("deltaTemperature", lPhyBeastConfig.getDeltaTemperature());
-        mc3.setInputValue("resampleEvery",    lPhyBeastConfig.getResampleEvery());
-        mc3.setInputValue("target",           lPhyBeastConfig.getTarget());
-
-
-        // TODO eventually all operator related code should go there
-        // create XML operator section, with the capability to replace default operators
-        OperatorStrategy operatorStrategy = new DefaultOperatorStrategy(this);
-        // create all operators, where tree operators strategy can be changed in an extension.
-        List<Operator> operators = operatorStrategy.createOperators();
-        for (int i = 0; i < operators.size(); i++) {
-            System.out.println(operators.get(i));
-        }
-        mc3.setInputValue("operator", operators);
-
-        // TODO eventually all logging related code should go there
-        // create XML logger section
-        topDist = createTopCompoundDist();
-        LoggerFactory loggerFactory = new LoggerFactory(this, topDist);
-        // 3 default loggers: parameter logger, screen logger, tree logger.
-        List<Logger> loggers = loggerFactory.createLoggers(logEvery, logFileStem);
-        // extraLoggers processed in LoggerFactory
-        mc3.setInputValue("logger", loggers);
-
-        State state = new State();
-        state.setInputValue("stateNode", this.state);
-        state.initAndValidate();
-        elements.put(state, null);
-
-        // TODO make sure the stateNode list is being correctly populated
-        mc3.setInputValue("state", state);
-
-        if (inits.size() > 0) mc3.setInputValue("init", inits);
-
-        if (preBurnin > 0)
-            mc3.setInputValue("preBurnin", preBurnin);
-
-        mc3.initAndValidate();
-        return mc3;
+        // delegate to strategy
+        MCMCStrategy strategy = resolveMCMCStrategy();
+        return strategy.createRun(posterior, operators, loggers, beastState, inits,
+                chainLength, preBurnin, sampleFromPrior, lPhyBeastConfig);
     }
 
     // posterior, likelihood, prior
@@ -870,7 +719,8 @@ public class BEASTContext {
             if (createGenerators) {
                 if (beastGenerator == null) {
                     if (!isExcludedGenerator(generator)) {
-                        throw new UnsupportedOperationException("Unhandled generator in generatorToBEAST(): " + generator.getClass());
+                        throw new UnsupportedOperationException(buildMissingMappingMessage(
+                                "generator", null, generator.getClass(), null));
                     }
                 } else {
                     addToContext(generator, beastGenerator);
@@ -880,7 +730,7 @@ public class BEASTContext {
     }
 
     private boolean isExcludedGenerator(Generator generator) {
-        if (LPhyBEASTExt.isExcludedGenerator(generator))
+        if (LPhyBEASTMapping.isExcludedGenerator(generator))
             return true;
         for (Class<? extends Generator> gCls : excludedGeneratorClasses)
             // if generator.getClass() is either the same as, or is a superclass or superinterface of, gCls.
@@ -899,9 +749,11 @@ public class BEASTContext {
             beastValue = toBEAST.valueToBEAST(val, this);
         }
         if (beastValue == null) {
-            if (!isExcludedValue(val))
-                throw new UnsupportedOperationException("Unhandled value" + (!val.isAnonymous() ? " named " + val.getId() : "") + " in valueToBEAST(): \"" +
-                        val + "\" of type " + val.value().getClass());
+            if (!isExcludedValue(val)) {
+                throw new UnsupportedOperationException(buildMissingMappingMessage(
+                        "value", val.isAnonymous() ? null : val.getId(),
+                        val.value().getClass(), val.getGenerator()));
+            }
         } else {
             // here is the common way to fill in context,
             // but there is another special method to do this
@@ -913,7 +765,7 @@ public class BEASTContext {
 
     // handle the classes in excludedValueTypes, and also their types in an array.
     private boolean isExcludedValue(Value value) {
-        if (LPhyBEASTExt.isExcludedValue(value)) // takes Value
+        if (LPhyBEASTMapping.isExcludedValue(value)) // takes Value
             return true;
         Class valueType = value.getType();
         // value.value() is array
@@ -921,7 +773,7 @@ public class BEASTContext {
             Class componentClass;
             if (value.value() instanceof Object[] objects) {
                 // this can be used to exclude String[][]
-                if (LPhyBEASTExt.isExcludedValue(objects[0]))
+                if (LPhyBEASTMapping.isExcludedValue(objects[0]))
                     return true;
                 // Object[] can be different classes, such as TimeTreeNode[],
                 // getComponentType() only returns Object.
@@ -965,13 +817,6 @@ public class BEASTContext {
                 if (beastInterface instanceof StateNode) {
                     // include MutableAlignment
                     state.add((StateNode) beastInterface);
-                } else if (beastInterface instanceof Concatenate) {
-                    Concatenate concatenate = (Concatenate) beastInterface;
-                    for (Function function : concatenate.functionsInput.get()) {
-                        if (function instanceof StateNode && !state.contains(function)) {
-                            state.add((StateNode) function);
-                        }
-                    }
                 } else if (beastInterface instanceof BEASTVector) {
                     for (BEASTInterface beastElement : ((BEASTVector) beastInterface).getObjectList()) {
                         // BI obj is wrapped inside BEASTVector, so check existence again
@@ -979,16 +824,19 @@ public class BEASTContext {
                             state.add((StateNode) beastElement);
                         }
                     }
-                } else if (beastInterface instanceof Slice) {
-                    BEASTInterface parent = (BEASTInterface)((Slice)beastInterface).functionInput.get();
-                    if (parent instanceof StateNode) {
-                        if (!state.contains(parent)) {
-                            state.add((StateNode) parent);
-                        } else {
-                            // parent already in state
-                        }
+                } else if (beastInterface instanceof VectorElement<?> ve) {
+                    BEASTInterface parent = (BEASTInterface) ve.vectorInput.get();
+                    if (parent instanceof StateNode sn) {
+                        if (!state.contains(sn)) state.add(sn);
                     } else {
-                        throw new RuntimeException("Slice representing random value, but the sliced beast interface is not a state node!");
+                        throw new RuntimeException("VectorElement representing random value, but the vector is not a state node!");
+                    }
+                } else if (beastInterface instanceof VectorSlice<?> vs) {
+                    BEASTInterface parent = (BEASTInterface) vs.vectorInput.get();
+                    if (parent instanceof StateNode sn) {
+                        if (!state.contains(sn)) state.add(sn);
+                    } else {
+                        throw new RuntimeException("VectorSlice representing random value, but the vector is not a state node!");
                     }
                 } else if (beastInterface instanceof Alignment) {
                     // Do nothing here
@@ -1017,28 +865,7 @@ public class BEASTContext {
 
     //*** static methods to init BEAST 2 models ***//
 
-    /**
-     * @param freqParameter
-     * @param stateNames    the names of the states in a space-delimited string
-     * @return
-     */
-    public static Frequencies createBEASTFrequencies(RealParameter freqParameter, String stateNames) {
-        Frequencies frequencies = new Frequencies();
-        frequencies.setInputValue("frequencies", freqParameter);
-        freqParameter.setInputValue("keys", stateNames);
-        freqParameter.initAndValidate();
-        frequencies.initAndValidate();
-        return frequencies;
-    }
 
-    public static Prior createPrior(ParametricDistribution distr, Function function) {
-        Prior prior = new Prior();
-        prior.setInputValue("distr", distr);
-        prior.setInputValue("x", function);
-        prior.initAndValidate();
-        if (function instanceof BEASTInterface) prior.setID(((BEASTInterface) function).getID() + ".prior");
-        return prior;
-    }
 
     public static double getOperatorWeight(int size, double pow) {
         return Math.pow(size, pow);
@@ -1155,15 +982,6 @@ public class BEASTContext {
         return posterior;
     }
 
-    public Prior getPrior(Function param) {
-        for (BEASTInterface beastInterface : elements.keySet()) {
-            if (beastInterface instanceof Prior prior && prior.m_x.get().equals(param) ) {
-                return prior;
-            }
-        }
-        return null;
-    }
-
     private void logOrignalAlignment(GenericTreeLikelihood treeLikelihood) {
         Alignment alignment = treeLikelihood.dataInput.get();
         String algXML = new XMLProducer().toXML(alignment);
@@ -1210,8 +1028,8 @@ public class BEASTContext {
         for (StateNode stateNode : stateNodes) {
             if (stateNode instanceof TreeInterface)
                 size += ((TreeInterface) stateNode).getInternalNodeCount();
-            else
-                size += stateNode.getDimension();
+            else if (stateNode instanceof Function)
+                size += ((Function) stateNode).getDimension();
         }
         return size;
     }
@@ -1376,6 +1194,58 @@ public class BEASTContext {
             }, true);
         }
         return outputValue[0];
+    }
+
+    /**
+     * Build a diagnostic message for a missing generator or value mapping,
+     * listing which extensions are loaded and what generators they provide.
+     *
+     * @param kind      "value" or "generator"
+     * @param name      the variable name (nullable)
+     * @param cls       the class of the value or generator
+     * @param generator the generator that produced the value (nullable, only for values)
+     */
+    private String buildMissingMappingMessage(String kind, String name, Class<?> cls,
+                                              lphy.core.model.Generator generator) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Unhandled ").append(kind);
+        if (name != null) sb.append(" '").append(name).append("'");
+        sb.append(" of type ").append(cls.getSimpleName());
+
+        if (generator != null) {
+            sb.append("\n  Generated by: ").append(generator.getClass().getSimpleName());
+        }
+
+        // Show what's loaded
+        if (loader != null) {
+            var summary = loader.getExtensionGeneratorSummary();
+            if (!summary.isEmpty()) {
+                sb.append("\n  Loaded extensions and their generators:");
+                for (var entry : summary.entrySet()) {
+                    // Show short extension name (last part of class name)
+                    String extShort = entry.getKey();
+                    int dot = extShort.lastIndexOf('.');
+                    if (dot >= 0) extShort = extShort.substring(dot + 1);
+                    sb.append("\n    ").append(extShort).append(": ")
+                            .append(String.join(", ", entry.getValue()));
+                }
+            }
+
+            // Check if the generator class has a loaded mapping
+            Class<?> genClass = generator != null ? generator.getClass() : cls;
+            String source = loader.getGeneratorSource(genClass);
+            if (source != null) {
+                sb.append("\n  Note: ").append(genClass.getSimpleName())
+                        .append(" has a GeneratorToBEAST in ").append(source)
+                        .append(" but no ValueToBEAST matched the output value.");
+            } else if (generator != null) {
+                sb.append("\n  No loaded extension provides a mapping for ")
+                        .append(genClass.getSimpleName()).append(".");
+                sb.append("\n  Ensure the required extension is loaded via -vf <extension>/version.xml");
+            }
+        }
+
+        return sb.toString();
     }
 
 }

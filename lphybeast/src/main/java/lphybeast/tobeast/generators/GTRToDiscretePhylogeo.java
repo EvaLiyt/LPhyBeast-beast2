@@ -1,9 +1,9 @@
 package lphybeast.tobeast.generators;
 
 import beast.base.core.BEASTInterface;
-import beast.base.evolution.substitutionmodel.Frequencies;
-import beast.base.inference.parameter.BooleanParameter;
-import beast.base.inference.parameter.RealParameter;
+import beast.base.spec.inference.parameter.BoolVectorParam;
+import beast.base.spec.evolution.substitutionmodel.Frequencies;
+import beast.base.spec.type.Simplex;
 import beastclassic.evolution.substitutionmodel.SVSGeneralSubstitutionModel;
 import lphy.base.evolution.substitutionmodel.GeneralTimeReversible;
 import lphy.base.function.Select;
@@ -13,7 +13,6 @@ import lphy.core.model.Value;
 import lphybeast.BEASTContext;
 import lphybeast.GeneratorToBEAST;
 
-import java.util.Arrays;
 import java.util.Map;
 
 public class GTRToDiscretePhylogeo implements
@@ -34,20 +33,16 @@ public class GTRToDiscretePhylogeo implements
             throw new IllegalStateException("Expecting 'select' function to produce traits rates, given rates and boolean indicators");
 
         GraphicalModelNode<?> rateNode = (GraphicalModelNode<?>) selectFunParams.get(Select.valueParamName);
-        RealParameter rates = (RealParameter) context.getBEASTObject(rateNode);
-        svs.setInputValue("rates", rates);
+        svs.setInputValue("rates", context.getBEASTObject(rateNode));
 
         GraphicalModelNode<?> indicatorNode = (GraphicalModelNode<?>) selectFunParams.get(Select.indicatorParamName);
-        BooleanParameter rateIndicators = (BooleanParameter) context.getBEASTObject(indicatorNode);
+        BoolVectorParam rateIndicators = (BoolVectorParam) context.getBEASTObject(indicatorNode);
 
-        RealParameter traitfrequencies = (RealParameter) context.getBEASTObject(gtr.getFreq());
-        Frequencies traitfreqs = new Frequencies();
-        traitfreqs.setInputValue("frequencies", traitfrequencies);
-        traitfreqs.initAndValidate();
+        Simplex freqSimplex = (Simplex) context.getBEASTObject(gtr.getFreq());
+        Frequencies traitfreqs = new Frequencies(freqSimplex);
         svs.setInputValue("frequencies", traitfreqs);
 
-        // frequencies dim = number of states
-        int stateCount = traitfrequencies.getDimension();
+        int stateCount = traitfreqs.getFreqs().length;
         validateIndicators(rateIndicators, stateCount);
         svs.setInputValue("rateIndicator", rateIndicators);
 
@@ -56,21 +51,19 @@ public class GTRToDiscretePhylogeo implements
         return svs;
     }
 
-    // To avoid initialization issue #31
-    private void validateIndicators(BooleanParameter rateIndicators, int stateCount) {
-        // symmetric rates
-        if (rateIndicators.getDimension() != stateCount * (stateCount - 1) / 2)
+    private void validateIndicators(BoolVectorParam rateIndicators, int stateCount) {
+        if (rateIndicators.size() != stateCount * (stateCount - 1) / 2)
             throw new IllegalStateException("In symmetric rates model, the rate indicators should have the dimension of " +
                     "stateCount * (stateCount - 1) / 2 !\nBut stateCount = " + stateCount +
-                    ", indicators dimension = " + rateIndicators.getDimension());
+                    ", indicators dimension = " + rateIndicators.size());
 
-        long numOfTrue = Arrays.stream(rateIndicators.getValues()).filter(indicator -> indicator).count();
+        long numOfTrue = 0;
+        for (boolean b : rateIndicators.getValues()) if (b) numOfTrue++;
 
         if (numOfTrue < stateCount)
             throw new IllegalArgumentException("Invalid init value of the trait rate indicators, where " +
                     numOfTrue + " 'true' " + " is less than number of states " + stateCount +
                     "! Set all to be 'true' in XML !");
-
     }
 
     @Override

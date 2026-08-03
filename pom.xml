@@ -1,49 +1,121 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <!-- must have this -->
-    <parent>
-        <groupId>io.github.linguaphylo</groupId>
-        <artifactId>linguaphylo</artifactId>
-        <!-- parent pom version -->
-        <version>1.8.0-SNAPSHOT</version>
-    </parent>
 
+    <groupId>io.github.linguaphylo</groupId>
     <artifactId>lphybeast-root</artifactId>
-    <version>${revision}</version>
+    <version>1.4.0</version>
     <packaging>pom</packaging>
 
-    <name>lphybeast-root</name>
+    <name>LPhyBeast</name>
+    <description>LPhy to BEAST 3 translator</description>
     <url>https://linguaphylo.github.io/</url>
 
+    <licenses>
+        <license>
+            <name>GNU Lesser General Public License v2.1</name>
+            <url>https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Walter Xie</name>
+            <url>https://github.com/walterxie</url>
+        </developer>
+        <developer>
+            <name>Alexei Drummond</name>
+            <url>https://github.com/alexeid</url>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/LinguaPhylo/LPhyBeast.git</connection>
+        <developerConnection>scm:git:ssh://github.com:LinguaPhylo/LPhyBeast.git</developerConnection>
+        <url>https://github.com/LinguaPhylo/LPhyBeast</url>
+    </scm>
+
     <properties>
-        <!-- lphy vision in the dependencies  -->
-        <lphy.vision>1.8.0-SNAPSHOT</lphy.vision>
-        <beast.version>2.7.8</beast.version>
-        <!-- used by lphybeast : https://maven.apache.org/maven-ci-friendly.html -->
-        <revision>1.3.0</revision>
-        <!-- used by lphybeast ext -->
-        <lphybeastext.version>1.0.0</lphybeastext.version>
+        <lphy.version>1.8.0-beta1</lphy.version>
+        <beast.version>2.8.0-beta7</beast.version>
         <lphybeast.args>-h</lphybeast.args>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <project.organization.name>LPhyBeast team</project.organization.name>
+        <!-- External BEAST2 package versions — managed here for all child modules -->
+<!--        <bdtree.version>0.1.0-SNAPSHOT</bdtree.version>-->
+        <beast.classic.version>1.7.0-beta1</beast.classic.version>
+        <beast.labs.version>2.1.0-beta2</beast.labs.version>
+        <beast.orc.version>1.3.1</beast.orc.version>
+        <coupled.mcmc.version>1.3.0-beta1</coupled.mcmc.version>
+<!--        <feast.version>11.0.1</feast.version>-->
+        <flc.version>1.3.0-beta1</flc.version>
+        <mascot.version>3.1.0-beta1</mascot.version>
+        <morph.models.version>1.3.0-beta3</morph.models.version>
+        <mutable.alignment.version>0.1.0-SNAPSHOT</mutable.alignment.version>
+        <sampled.ancestors.version>2.3.0-beta1</sampled.ancestors.version>
+        <substmodels.version>1.3.2</substmodels.version>
     </properties>
 
     <modules>
-        <module>../linguaPhylo</module>
-<!--   Project 'io.github.linguaphylo:lphy:1.6.0-SNAPSHOT' is duplicated in the reactor   -->
-<!--        <module>../linguaPhylo/lphy</module>-->
-<!--        <module>../linguaPhylo/lphy-base</module>-->
         <module>lphybeast</module>
-<!--        <module>lblauncher</module>-->
-        <module>lphybeast-flc</module>
-        <module>lphybeast-mascot</module>
-        <module>lphybeast-mm</module>
+<!--        <module>lphybeast-bdtree</module>-->
+<!--        <module>lphybeast-feast</module>-->
+        <module>lphybeast-mc3</module>
         <module>lphybeast-sa</module>
-        <module>lphybeast-ext-dist</module>
+        <module>lphybeast-mm</module>
+        <module>lphybeast-orc</module>
+        <module>lphybeast-mascot</module>
+        <module>lphybeast-flc</module>
+        <module>lphybeast-ssm</module>
+        <module>lphybeast-launcher</module>
+        <!-- <module>lphybeast-ext-dist</module> -->
     </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- BEAST 3 -->
+            <dependency>
+                <groupId>io.github.compevol</groupId>
+                <artifactId>beast-base</artifactId>
+                <version>${beast.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.compevol</groupId>
+                <artifactId>beast-pkgmgmt</artifactId>
+                <version>${beast.version}</version>
+            </dependency>
+            <!-- LPhy -->
+            <dependency>
+                <groupId>io.github.linguaphylo</groupId>
+                <artifactId>lphy-base</artifactId>
+                <version>${lphy.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.linguaphylo</groupId>
+                <artifactId>lphy</artifactId>
+                <version>${lphy.version}</version>
+            </dependency>
+            <!-- Testing -->
+            <dependency>
+                <groupId>org.junit.jupiter</groupId>
+                <artifactId>junit-jupiter</artifactId>
+                <version>5.8.2</version>
+                <scope>test</scope>
+            </dependency>
+            <!-- External BEAST2 packages -->
+            <dependency><groupId>io.github.beast2-dev</groupId><artifactId>substmodels</artifactId><version>${substmodels.version}</version></dependency>
+<!--            <dependency><groupId>io.github.tgvaughan</groupId><artifactId>feast</artifactId><version>${feast.version}</version></dependency>-->
+<!--            <dependency><groupId>io.github.compevol</groupId><artifactId>bdtree</artifactId><version>${bdtree.version}</version></dependency>-->
+            <dependency><groupId>io.github.4ment</groupId><artifactId>flc</artifactId><version>${flc.version}</version></dependency>
+            <dependency><groupId>io.github.compevol</groupId><artifactId>mutable-alignment</artifactId><version>${mutable.alignment.version}</version></dependency>
+            <dependency><groupId>io.github.compevol</groupId><artifactId>mascot</artifactId><version>${mascot.version}</version></dependency>
+            <dependency><groupId>io.github.compevol</groupId><artifactId>coupled-mcmc</artifactId><version>${coupled.mcmc.version}</version></dependency>
+            <dependency><groupId>io.github.compevol</groupId><artifactId>morph-models</artifactId><version>${morph.models.version}</version></dependency>
+            <dependency><groupId>io.github.jordandouglas</groupId><artifactId>beast-orc</artifactId><version>${beast.orc.version}</version></dependency>
+            <dependency><groupId>io.github.compevol</groupId><artifactId>sampled-ancestors</artifactId><version>${sampled.ancestors.version}</version></dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <pluginManagement>
@@ -63,7 +135,75 @@
                 </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Source JAR — required for Maven Central; skipped automatically for pom-packaging modules -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>attach-sources</id>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
+
+    <profiles>
+        <!-- Activated by CI on v* tags: mvn -Prelease clean deploy -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.11.2</version>
+                        <configuration>
+                            <doclint>none</doclint>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>3.2.7</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.11.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <!-- https://maven.apache.org/plugins/maven-jar-plugin/examples/create-test-jar.html-->
 <!--    <dependencies>-->

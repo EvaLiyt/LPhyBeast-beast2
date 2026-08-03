@@ -1,47 +1,30 @@
 package lphybeast.tobeast.generators;
 
 import beast.base.core.BEASTInterface;
-import beast.base.inference.distribution.Prior;
-import beast.base.inference.parameter.IntegerParameter;
-import beast.base.inference.parameter.RealParameter;
+import beast.base.inference.Distribution;
+import beast.base.spec.domain.Real;
+import beast.base.spec.type.RealScalar;
 import lphy.base.distribution.Uniform;
 import lphybeast.BEASTContext;
 import lphybeast.GeneratorToBEAST;
 
-public class UniformToBEAST implements GeneratorToBEAST<Uniform, Prior> {
+public class UniformToBEAST implements GeneratorToBEAST<Uniform, Distribution> {
     @Override
+    public Distribution generatorToBEAST(Uniform generator, BEASTInterface value, BEASTContext context) {
 
-    public Prior generatorToBEAST(Uniform generator, BEASTInterface value, BEASTContext context) {
+        RealScalar<Real> lower = (RealScalar<Real>) context.getAsRealScalar(generator.getLower());
+        RealScalar<Real> upper = (RealScalar<Real>) context.getAsRealScalar(generator.getUpper());
 
-        beast.base.inference.distribution.Uniform uniform = new beast.base.inference.distribution.Uniform();
-
-        BEASTInterface lowerB = context.getBEASTObject(generator.getLower());
-        BEASTInterface upperB = context.getBEASTObject(generator.getUpper());
-
-        Double lower = Double.NEGATIVE_INFINITY;
-        Double upper = Double.POSITIVE_INFINITY;
-
-        if (lowerB instanceof RealParameter) {
-            lower = ((RealParameter)lowerB).getValue();
-        } else if (lowerB instanceof IntegerParameter) {
-            lower = ((IntegerParameter)lowerB).getValue().doubleValue();
-        } else {
-            throw new IllegalArgumentException("BEAST2 can only have constants for lower and upper of Uniform distribution.");
+        beast.base.spec.inference.distribution.Uniform dist =
+                new beast.base.spec.inference.distribution.Uniform();
+        dist.setInputValue("lower", lower);
+        dist.setInputValue("upper", upper);
+        if (value != null) {
+            dist.setInputValue("param", value);
+            dist.setID(((BEASTInterface) value).getID() + ".prior");
         }
-
-        if (upperB instanceof RealParameter) {
-            upper = ((RealParameter)upperB).getValue();
-        } else if (upperB instanceof IntegerParameter) {
-            upper = ((IntegerParameter)upperB).getValue().doubleValue();
-        } else {
-            throw new IllegalArgumentException("BEAST2 can only have constants for lower and upper of Uniform distribution.");
-        }
-
-        uniform.setInputValue("lower", lower);
-        uniform.setInputValue("upper", upper);
-        uniform.initAndValidate();
-
-        return BEASTContext.createPrior(uniform, (RealParameter)value);
+        dist.initAndValidate();
+        return dist;
     }
 
     @Override
@@ -50,7 +33,7 @@ public class UniformToBEAST implements GeneratorToBEAST<Uniform, Prior> {
     }
 
     @Override
-    public Class<Prior> getBEASTClass() {
-        return Prior.class;
+    public Class<Distribution> getBEASTClass() {
+        return Distribution.class;
     }
 }

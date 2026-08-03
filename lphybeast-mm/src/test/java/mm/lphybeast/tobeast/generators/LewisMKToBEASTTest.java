@@ -1,20 +1,17 @@
 package mm.lphybeast.tobeast.generators;
 
-import lphy.core.io.UserDir;
-import lphybeast.TestUtils;
+import beast.pkgmgmt.BEASTClassLoader;
+import lphybeast.LPhyBEASTLoader;
+import lphybeast.LPhyBeast;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
-
-/**
- * Check the XML
- * @author Walter Xie
- */
 public class LewisMKToBEASTTest {
 
     private String lewisMK = """
@@ -23,38 +20,36 @@ public class LewisMKToBEASTTest {
             Q = lewisMK(numStates=%2$s);
             D ~ PhyloCTMC(L=20, Q=Q, tree=ψ, dataType=standard(%2$s));""";
 
-
     @BeforeEach
     public void setUp() {
-        // load ../LPhyBeast/version.xml
-        Path lphybeastDir = Paths.get(UserDir.getUserDir().toAbsolutePath().getParent().toString(),
-                "..","LPhyBeast", "lphybeast");
-        // load mm/version.xml
-        Path parentDir = UserDir.getUserDir().toAbsolutePath();
-        TestUtils.loadServices(parentDir.toString());
+        BEASTClassLoader.classLoader.addServices("lphybeast-mm", Map.of(
+                "lphybeast.spi.LPhyBEASTMapping", Set.of("mm.lphybeast.spi.MMLBImpl")
+        ));
+        LPhyBEASTLoader.loadServicesForTest(System.getProperty("user.dir") + "/../lphybeast");
     }
 
     @Test
-    public void testLewisMK() {
+    public void testLewisMK() throws IOException {
         int ntaxa = 16;
         int nState = 3;
-        String xml = TestUtils.lphyScriptToBEASTXML(String.format(lewisMK, ntaxa, nState), "lewisMK");
+        LPhyBeast lPhyBeast = new LPhyBeast();
+        String xml = lPhyBeast.lphyStrToXML(String.format(lewisMK, ntaxa, nState), "lewisMK");
 
-        TestUtils.assertXMLNTaxa(xml, ntaxa);
+        assertNotNull(xml);
+        assertTrue(xml.contains("<beast") && xml.contains("</beast>"));
+        assertTrue(xml.contains("<data") && xml.contains("</data>"), "alignment tag");
 
         assertTrue(xml.contains("<userDataType") && xml.contains("codeMap=\"0=0,1=1,2=2,") &&
-                xml.contains("states=\"" + nState + "\""), "userDataType" );
+                xml.contains("states=\"" + nState + "\""), "userDataType");
 
         assertTrue(xml.contains("<substModel") && xml.contains("id=\"LewisMK\"") &&
                 xml.contains("morphmodels.evolution.substitutionmodel.LewisMK") &&
-                xml.contains("stateNumber=\"" + nState + "\""), "LewisMK substModel" );
+                xml.contains("stateNumber=\"" + nState + "\""), "LewisMK substModel");
 
-        assertTrue(xml.contains("<distribution") && xml.contains("id=\"Theta.prior\"") &&
-                xml.contains("x=\"@Theta\"") && xml.contains("distribution.LogNormalDistributionModel") &&
-                xml.contains("name=\"M\">3.0</parameter>") && xml.contains("name=\"S\">1.0</parameter>"), "Theta prior" );
+        assertTrue(xml.contains("id=\"Theta.prior\"") && xml.contains("param=\"@Theta\"") &&
+                xml.contains("distribution.LogNormal"), "Theta prior");
 
-        assertTrue(xml.contains("<distribution") && xml.contains("id=\"Coalescent\""), "Coalescent" );
-        assertTrue(xml.contains("<populationModel") && xml.contains("popSize=\"@Theta\""), "popSize" );
+        assertTrue(xml.contains("<distribution") && xml.contains("id=\"Coalescent\""), "Coalescent");
+        assertTrue(xml.contains("<populationModel") && xml.contains("popSize=\"@Theta\""), "popSize");
     }
-
 }

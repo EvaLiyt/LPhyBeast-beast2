@@ -1,0 +1,9 @@
+<package name='lphybeast-mc3' version='1.4.0'>
+    <depends on='lphybeast' atleast='1.4.0'/>
+    <depends on='CoupledMCMC' atleast='1.3.0'/>
+
+    <service type="lphybeast.spi.MCMCStrategy">
+        <provider classname="mc3.lphybeast.CoupledMCMCStrategy"/>
+    </service>
+
+</package>

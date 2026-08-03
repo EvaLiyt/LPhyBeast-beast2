@@ -1,26 +1,31 @@
 package lphybeast.tobeast.generators;
 
 import beast.base.core.BEASTInterface;
-import beast.base.core.Function;
-import beast.base.inference.distribution.Prior;
+import beast.base.inference.Distribution;
+import beast.base.spec.type.RealVector;
 import lphy.base.distribution.WeightedDirichlet;
 import lphy.core.model.Value;
 import lphybeast.BEASTContext;
 import lphybeast.GeneratorToBEAST;
 
-public class WeightedDirichletToBEAST implements GeneratorToBEAST<WeightedDirichlet, Prior> {
+public class WeightedDirichletToBEAST implements GeneratorToBEAST<WeightedDirichlet, Distribution> {
     @Override
-    public Prior generatorToBEAST(WeightedDirichlet generator, BEASTInterface value, BEASTContext context) {
+    public Distribution generatorToBEAST(WeightedDirichlet generator, BEASTInterface value, BEASTContext context) {
 
         Value<Number[]> concentration = generator.getConcentration();
 
+        RealVector<?> alpha = context.getAsRealVector(concentration);
+        RealVector<?> weights = context.getAsRealVector(generator.getWeights());
+
         beastlabs.math.distributions.WeightedDirichlet beastDirichlet =
                 new beastlabs.math.distributions.WeightedDirichlet();
-        beastDirichlet.setInputValue("alpha", context.getAsRealParameter(concentration));
-        beastDirichlet.setInputValue("weights", context.getAsIntegerParameter(generator.getWeights()));
+        beastDirichlet.setInputValue("param", value);
+        beastDirichlet.setInputValue("alpha", alpha);
+        beastDirichlet.setInputValue("weights", weights);
         beastDirichlet.initAndValidate();
 
-        return BEASTContext.createPrior(beastDirichlet, (Function) value);
+        beastDirichlet.setID(((BEASTInterface) value).getID() + ".prior");
+        return beastDirichlet;
     }
 
     @Override
@@ -29,14 +34,7 @@ public class WeightedDirichletToBEAST implements GeneratorToBEAST<WeightedDirich
     }
 
     @Override
-    public Class<Prior> getBEASTClass() {
-        return Prior.class;
+    public Class<Distribution> getBEASTClass() {
+        return Distribution.class;
     }
-
-//    private boolean allOne(Value<Number[]> concentration) {
-//        Number[] conc = concentration.value();
-//        for (Number num : conc)
-//            if (num.doubleValue() != 1.0) return false;
-//        return true;
-//    }
 }

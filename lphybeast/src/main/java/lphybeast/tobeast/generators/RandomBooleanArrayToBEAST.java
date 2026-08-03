@@ -1,9 +1,10 @@
 package lphybeast.tobeast.generators;
 
 import beast.base.core.BEASTInterface;
-import beast.base.inference.distribution.ParametricDistribution;
-import beast.base.inference.distribution.Prior;
-import beast.base.inference.parameter.IntegerParameter;
+import beast.base.inference.Distribution;
+import beast.base.inference.StateNode;
+import beast.base.spec.evolution.IntSum;
+import beast.base.spec.inference.distribution.OffsetInt;
 import lphy.base.distribution.RandomBooleanArray;
 import lphy.core.model.Generator;
 import lphy.core.model.Value;
@@ -12,29 +13,39 @@ import lphybeast.GeneratorToBEAST;
 
 import java.util.Objects;
 
-public class RandomBooleanArrayToBEAST implements GeneratorToBEAST<RandomBooleanArray, Prior> {
+public class RandomBooleanArrayToBEAST implements GeneratorToBEAST<RandomBooleanArray, Distribution> {
     @Override
-    public Prior generatorToBEAST(RandomBooleanArray generator, BEASTInterface value, BEASTContext context) {
+    public Distribution generatorToBEAST(RandomBooleanArray generator, BEASTInterface value, BEASTContext context) {
         // Poisson => S => RandomBooleanArray => I
         Value s = Objects.requireNonNull(generator.getParams().get("hammingWeight"));
         BEASTInterface sI = context.getBEASTObject(s);
-        if ( !(sI instanceof IntegerParameter) )
-            throw new IllegalStateException("Expecting the mapped BEAST IntegerParameter S from hammingWeight !");
-        // rm IntegerParameter S
+        if ( !(sI instanceof StateNode) )
+            throw new IllegalStateException("Expecting a mapped BEAST StateNode from hammingWeight !");
+        // rm the S parameter
         context.removeBEASTObject(sI);
 
-        // Poisson
+        // Get the Poisson (or OffsetInt) distribution for S
         Generator poissonGenerator = s.getGenerator();
-        Prior poissonPrior = (Prior) context.getBEASTObject(poissonGenerator);
-        // need distr not prior
-        context.removeBEASTObject(poissonPrior);
+        Distribution poissonDist = (Distribution) context.getBEASTObject(poissonGenerator);
+        context.removeBEASTObject(poissonDist);
 
-        ParametricDistribution dist = poissonPrior.distInput.get();
-        beast.base.evolution.Sum x = new beast.base.evolution.Sum();
+        // Re-target the distribution to IntSum(I) instead of S
+        IntSum x = new IntSum();
         x.setInputValue("arg", value);
-        Prior prior = BEASTContext.createPrior(dist, x);
-        prior.setID(value.getID() + ".prior");
-        return prior;
+        x.initAndValidate();
+
+        // Replace param on the spec distribution with IntSum(I)
+        if (poissonDist instanceof OffsetInt offsetInt) {
+            offsetInt.setInputValue("param", x);
+            offsetInt.setID(value.getID() + ".prior");
+            offsetInt.initAndValidate();
+            return offsetInt;
+        } else {
+            poissonDist.setInputValue("param", x);
+            poissonDist.setID(value.getID() + ".prior");
+            poissonDist.initAndValidate();
+            return poissonDist;
+        }
     }
 
     @Override
@@ -43,7 +54,7 @@ public class RandomBooleanArrayToBEAST implements GeneratorToBEAST<RandomBoolean
     }
 
     @Override
-    public Class<Prior> getBEASTClass() {
-        return Prior.class;
+    public Class<Distribution> getBEASTClass() {
+        return Distribution.class;
     }
 }

@@ -1,20 +1,32 @@
 package lphybeast.tobeast.generators;
 
 import beast.base.core.BEASTInterface;
-import beast.base.inference.distribution.Prior;
-import beast.base.inference.parameter.RealParameter;
+import beast.base.inference.Distribution;
+import beast.base.spec.domain.PositiveReal;
+import beast.base.spec.type.RealScalar;
 import lphy.base.distribution.Gamma;
 import lphybeast.BEASTContext;
 import lphybeast.GeneratorToBEAST;
 
-public class GammaToBEAST implements GeneratorToBEAST<Gamma, Prior> {
+public class GammaToBEAST implements GeneratorToBEAST<Gamma, Distribution> {
     @Override
-    public Prior generatorToBEAST(Gamma generator, BEASTInterface value, BEASTContext context) {
-        beast.base.inference.distribution.Gamma gammaDistribution = new beast.base.inference.distribution.Gamma();
-        gammaDistribution.setInputValue("alpha", context.getBEASTObject(generator.getShape()));
-        gammaDistribution.setInputValue("beta", context.getBEASTObject(generator.getScale()));
-        gammaDistribution.initAndValidate();
-        return BEASTContext.createPrior(gammaDistribution, (RealParameter) value);
+    public Distribution generatorToBEAST(Gamma generator, BEASTInterface value, BEASTContext context) {
+
+        RealScalar<PositiveReal> alpha =
+                (RealScalar<PositiveReal>) context.getAsRealScalar(generator.getShape());
+        RealScalar<PositiveReal> theta =
+                (RealScalar<PositiveReal>) context.getAsRealScalar(generator.getScale());
+
+        beast.base.spec.inference.distribution.Gamma dist =
+                new beast.base.spec.inference.distribution.Gamma();
+        dist.setInputValue("alpha", alpha);
+        dist.setInputValue("theta", theta);
+        if (value != null) {
+            dist.setInputValue("param", value);
+            dist.setID(((BEASTInterface) value).getID() + ".prior");
+        }
+        dist.initAndValidate();
+        return dist;
     }
 
     @Override
@@ -23,7 +35,7 @@ public class GammaToBEAST implements GeneratorToBEAST<Gamma, Prior> {
     }
 
     @Override
-    public Class<Prior> getBEASTClass() {
-        return Prior.class;
+    public Class<Distribution> getBEASTClass() {
+        return Distribution.class;
     }
 }

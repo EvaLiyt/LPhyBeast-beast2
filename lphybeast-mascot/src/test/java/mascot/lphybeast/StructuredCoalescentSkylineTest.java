@@ -1,13 +1,16 @@
 package mascot.lphybeast;
 
-import lphy.core.io.UserDir;
-import lphybeast.TestUtils;
+import beast.pkgmgmt.BEASTClassLoader;
+import lphybeast.LPhyBEASTLoader;
+import lphybeast.LPhyBeast;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -20,11 +23,10 @@ public class StructuredCoalescentSkylineTest {
 
     @BeforeEach
     public void setUp() {
-        Path lphybeastDir = Paths.get(UserDir.getUserDir().toAbsolutePath().getParent().toString(),
-                "..", "LPhyBeast", "lphybeast");
-        TestUtils.loadServices(lphybeastDir.toString());
-        Path parentDir = UserDir.getUserDir().toAbsolutePath();
-        TestUtils.loadServices(parentDir.toString());
+        BEASTClassLoader.classLoader.addServices("lphybeast-mascot", Map.of(
+                "lphybeast.spi.LPhyBEASTMapping", Set.of("mascot.lphybeast.spi.MascotLBImpl")
+        ));
+        LPhyBEASTLoader.loadServicesForTest(System.getProperty("user.dir") + "/../lphybeast");
     }
 
     /**
@@ -32,7 +34,7 @@ public class StructuredCoalescentSkylineTest {
      * mascot.parameterdynamics.StructuredSkygrid as the per-deme Ne dynamics.
      */
     @Test
-    public void testSkylineConstantInterpolation() {
+    public void testSkylineConstantInterpolation() throws IOException {
         String lphyScript = """
             K = 2;
             n = 2;
@@ -54,7 +56,9 @@ public class StructuredCoalescentSkylineTest {
             D ~ PhyloCTMC(L=200, Q=jukesCantor(), tree=ψ);
             """;
 
-        String xml = TestUtils.lphyScriptToBEASTXML(lphyScript, "skylineConstant");
+        LPhyBeast lPhyBeast = new LPhyBeast();
+        String xml = lPhyBeast.lphyStrToXML(lphyScript, "skylineConstant");
+        assertNotNull(xml, "XML");
 
         assertTrue(xml.contains("mascot.dynamics.StructuredSkyline"),
                 "Should use StructuredSkyline dynamics");
@@ -72,7 +76,7 @@ public class StructuredCoalescentSkylineTest {
      * mascot.parameterdynamics.Skygrowth as the per-deme Ne dynamics.
      */
     @Test
-    public void testSkylineLinearInterpolation() {
+    public void testSkylineLinearInterpolation() throws IOException {
         String lphyScript = """
             K = 2;
             n = 2;
@@ -95,7 +99,9 @@ public class StructuredCoalescentSkylineTest {
             D ~ PhyloCTMC(L=200, Q=jukesCantor(), tree=ψ);
             """;
 
-        String xml = TestUtils.lphyScriptToBEASTXML(lphyScript, "skylineLinear");
+        LPhyBeast lPhyBeast = new LPhyBeast();
+        String xml = lPhyBeast.lphyStrToXML(lphyScript, "skylineLinear");
+        assertNotNull(xml, "XML");
 
         assertTrue(xml.contains("mascot.dynamics.StructuredSkyline"),
                 "Should use StructuredSkyline dynamics");
@@ -109,11 +115,11 @@ public class StructuredCoalescentSkylineTest {
 
     /**
      * Alternative path: M as raw data (a literal Double[]) — produces one flat
-     * RealParameter with no upstream generator. Ensures the converter accepts a
-     * direct RealParameter without wrapping in CompoundRealParameter.
+     * RealVectorParam with no upstream generator. Ensures the converter accepts
+     * a direct RealVectorParam without wrapping in CompoundRealScalarParam.
      */
     @Test
-    public void testSkylineFlatMPath() {
+    public void testSkylineFlatMPath() throws IOException {
         String lphyScript = """
             K = 2;
             n = 2;
@@ -135,7 +141,9 @@ public class StructuredCoalescentSkylineTest {
             D ~ PhyloCTMC(L=200, Q=jukesCantor(), tree=ψ);
             """;
 
-        String xml = TestUtils.lphyScriptToBEASTXML(lphyScript, "skylineFlatM");
+        LPhyBeast lPhyBeast = new LPhyBeast();
+        String xml = lPhyBeast.lphyStrToXML(lphyScript, "skylineFlatM");
+        assertNotNull(xml, "XML");
 
         assertTrue(xml.contains("mascot.dynamics.StructuredSkyline"),
                 "Should use StructuredSkyline dynamics");
@@ -150,7 +158,7 @@ public class StructuredCoalescentSkylineTest {
      * per-pair Skygrowth for migration.
      */
     @Test
-    public void testSkylineTimeVaryingMigration_linear() {
+    public void testSkylineTimeVaryingMigration_linear() throws IOException {
         String lphyScript = """
             K = 2;
             n = 2;
@@ -177,7 +185,9 @@ public class StructuredCoalescentSkylineTest {
             D ~ PhyloCTMC(L=200, Q=jukesCantor(), tree=ψ);
             """;
 
-        String xml = TestUtils.lphyScriptToBEASTXML(lphyScript, "skylineTimeVaryingM_linear");
+        LPhyBeast lPhyBeast = new LPhyBeast();
+        String xml = lPhyBeast.lphyStrToXML(lphyScript, "skylineTimeVaryingM_linear");
+        assertNotNull(xml, "XML");
 
         assertTrue(xml.contains("mascot.dynamics.StructuredMigrationSkyline"),
                 "Time-varying migration should use StructuredMigrationSkyline");
@@ -192,14 +202,14 @@ public class StructuredCoalescentSkylineTest {
     }
 
     /**
-     * Time-varying migration with constant interpolation. In this path Ne and
-     * migration both use Skygrowth (the only Mascot NeDynamics that supports
-     * independent per-trajectory rateShifts under StructuredMigrationSkyline).
-     * With interpolation="constant", LPhy simulator and Mascot agree at knot
-     * times but differ between knots.
+     * Time-varying migration with constant interpolation. In this path we use
+     * Skygrowth for both Ne and migration (the only way to support independent
+     * per-trajectory rateShifts under Mascot's StructuredMigrationSkyline).
+     * With interpolation="constant", the LPhy simulator and Mascot disagree
+     * between knots but agree at knot times.
      */
     @Test
-    public void testSkylineTimeVaryingMigration_constant() {
+    public void testSkylineTimeVaryingMigration_constant() throws IOException {
         String lphyScript = """
             K = 2;
             n = 2;
@@ -226,7 +236,9 @@ public class StructuredCoalescentSkylineTest {
             D ~ PhyloCTMC(L=200, Q=jukesCantor(), tree=ψ);
             """;
 
-        String xml = TestUtils.lphyScriptToBEASTXML(lphyScript, "skylineTimeVaryingM_constant");
+        LPhyBeast lPhyBeast = new LPhyBeast();
+        String xml = lPhyBeast.lphyStrToXML(lphyScript, "skylineTimeVaryingM_constant");
+        assertNotNull(xml, "XML");
 
         assertTrue(xml.contains("mascot.dynamics.StructuredMigrationSkyline"),
                 "Time-varying migration should use StructuredMigrationSkyline");
@@ -244,7 +256,7 @@ public class StructuredCoalescentSkylineTest {
      * split). Outer integration grid is the union.
      */
     @Test
-    public void testSkylineTimeVaryingMigration_independentGrids() {
+    public void testSkylineTimeVaryingMigration_independentGrids() throws IOException {
         String lphyScript = """
             K = 2;
             n = 4;
@@ -271,7 +283,9 @@ public class StructuredCoalescentSkylineTest {
             D ~ PhyloCTMC(L=200, Q=jukesCantor(), tree=ψ);
             """;
 
-        String xml = TestUtils.lphyScriptToBEASTXML(lphyScript, "skylineTimeVaryingM_independent");
+        LPhyBeast lPhyBeast = new LPhyBeast();
+        String xml = lPhyBeast.lphyStrToXML(lphyScript, "skylineTimeVaryingM_independent");
+        assertNotNull(xml, "XML");
 
         assertTrue(xml.contains("mascot.dynamics.StructuredMigrationSkyline"),
                 "Should use StructuredMigrationSkyline");

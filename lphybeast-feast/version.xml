@@ -1,0 +1,12 @@
+<package name='lphybeast-feast' version='1.4.0'>
+    <depends on='lphybeast' atleast='1.4.0'/>
+    <depends on='feast' atleast='11.0.1'/>
+
+    <service type="lphybeast.spi.LPhyBEASTMapping">
+        <provider classname="feast.lphybeast.spi.FeastLBImpl"/>
+    </service>
+    <service type="lphybeast.spi.ValueHandler">
+        <provider classname="feast.lphybeast.FeastValueHandler"/>
+    </service>
+
+</package>

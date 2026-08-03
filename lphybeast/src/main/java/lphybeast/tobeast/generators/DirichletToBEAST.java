@@ -1,20 +1,29 @@
 package lphybeast.tobeast.generators;
 
 import beast.base.core.BEASTInterface;
-import beast.base.inference.distribution.Prior;
-import beast.base.inference.parameter.RealParameter;
+import beast.base.inference.Distribution;
+import beast.base.spec.domain.PositiveReal;
+import beast.base.spec.type.RealVector;
+import beast.base.spec.type.Simplex;
 import lphy.base.distribution.Dirichlet;
 import lphybeast.BEASTContext;
 import lphybeast.GeneratorToBEAST;
 
-public class DirichletToBEAST implements GeneratorToBEAST<Dirichlet, Prior> {
+public class DirichletToBEAST implements GeneratorToBEAST<Dirichlet, Distribution> {
     @Override
-    public Prior generatorToBEAST(Dirichlet generator, BEASTInterface value, BEASTContext context) {
-        beast.base.inference.distribution.Dirichlet beastDirichlet = new beast.base.inference.distribution.Dirichlet();
-        beastDirichlet.setInputValue("alpha", context.getAsRealParameter(generator.getConcentration()));
-        beastDirichlet.initAndValidate();
+    public Distribution generatorToBEAST(Dirichlet generator, BEASTInterface value, BEASTContext context) {
 
-        return BEASTContext.createPrior(beastDirichlet, (RealParameter) value);
+        RealVector<PositiveReal> alpha = (RealVector<PositiveReal>) context.getAsRealVector(generator.getConcentration());
+
+        beast.base.spec.inference.distribution.Dirichlet dirichlet =
+                new beast.base.spec.inference.distribution.Dirichlet();
+        dirichlet.setInputValue("alpha", alpha);
+        if (value != null) {
+            dirichlet.setInputValue("param", value);
+            dirichlet.setID(((BEASTInterface) value).getID() + ".prior");
+        }
+        dirichlet.initAndValidate();
+        return dirichlet;
     }
 
     @Override
@@ -23,7 +32,7 @@ public class DirichletToBEAST implements GeneratorToBEAST<Dirichlet, Prior> {
     }
 
     @Override
-    public Class<Prior> getBEASTClass() {
-        return Prior.class;
+    public Class<Distribution> getBEASTClass() {
+        return Distribution.class;
     }
 }

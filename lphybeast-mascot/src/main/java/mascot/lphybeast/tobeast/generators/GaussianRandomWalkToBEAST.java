@@ -2,16 +2,20 @@ package mascot.lphybeast.tobeast.generators;
 
 import beast.base.core.BEASTInterface;
 import beast.base.inference.CompoundDistribution;
-import beast.base.inference.distribution.Normal;
-import beast.base.inference.distribution.Prior;
-import beastlabs.core.util.Slice;
+import beast.base.inference.Distribution;
+import beast.base.spec.domain.PositiveReal;
+import beast.base.spec.domain.Real;
+import beast.base.spec.inference.distribution.IID;
+import beast.base.spec.inference.distribution.Normal;
+import beast.base.spec.inference.parameter.RealScalarParam;
+import beast.base.spec.inference.parameter.VectorElement;
+import beast.base.spec.type.RealVector;
 import lphy.base.distribution.GaussianRandomWalk;
 import lphy.core.model.Generator;
 import lphy.core.model.Value;
 import lphy.core.vectorization.VectorUtils;
 import lphybeast.BEASTContext;
 import lphybeast.GeneratorToBEAST;
-import lphybeast.SliceFactory;
 import mascot.util.Difference;
 import mascot.util.First;
 
@@ -35,62 +39,67 @@ import mascot.util.First;
 public class GaussianRandomWalkToBEAST implements GeneratorToBEAST<GaussianRandomWalk, BEASTInterface> {
 
     @Override
+    @SuppressWarnings({"rawtypes", "unchecked"})
     public BEASTInterface generatorToBEAST(GaussianRandomWalk generator, BEASTInterface value, BEASTContext context) {
 
-        // Collected priors to return (single Prior if non-vectorised, BEASTVector of
-        // Difference+First priors if vectorised).
+        // Collected distributions to return (single Distribution if only a Difference
+        // prior, or CompoundDistribution if we also emit a First prior in the
+        // vectorised-firstValue case).
         java.util.List<BEASTInterface> produced = new java.util.ArrayList<>();
 
         Value firstValue = generator.getParams().get(GaussianRandomWalk.firstValueParamName);
         if (firstValue != null) {
             Generator dist = firstValue.getGenerator();
-            BEASTInterface upstreamPrior = (dist != null) ? context.getBEASTObject(dist) : null;
-            if (upstreamPrior != null) {
-                // Non-vectorised path: rewire the firstValue's own prior onto
-                // Slice(chain, 0) and drop the standalone firstValue — same as
-                // ExpMarkovChainToBEAST.
+            BEASTInterface upstreamDist = (dist != null) ? context.getBEASTObject(dist) : null;
+            if (upstreamDist != null) {
+                // Non-vectorised path: rewire the firstValue's upstream distribution
+                // (e.g. spec Normal) onto a VectorElement view of chain[0] and drop
+                // the standalone firstValue state node, as in ExpMarkovChainToBEAST.
                 BEASTInterface firstV = context.getBEASTObject(firstValue);
                 if (firstV != null) context.removeBEASTObject(firstV);
 
-                Slice feastSlice = SliceFactory.createSlice(value, 0, firstValue.getCanonicalId());
-                upstreamPrior.setInputValue("x", feastSlice);
-                context.putBEASTObject(dist, upstreamPrior);
+                VectorElement<Real> element = new VectorElement<>(
+                        (RealVector<Real>) value, 0);
+                element.setID(firstValue.getCanonicalId());
+                upstreamDist.setInputValue("param", element);
+                context.putBEASTObject(dist, upstreamDist);
             } else {
                 // Vectorised path: the firstValue is a component of an auto-vectorised
                 // parent (e.g. init ~ Normal(replicates=K)), which is registered as a
-                // single dim-K RealParameter with one upstream prior. We emit a fresh
-                // First(chain) ~ firstValue_distribution prior per chain component and
-                // best-effort drop the redundant parent parameter + its prior.
-                Prior firstPrior = emitFirstPrior(value, dist);
+                // single dim-K parameter with one upstream Normal. The component
+                // distributions aren't individually registered, so emit a fresh
+                // Normal(mean, sd) on First(chain) and best-effort drop the
+                // redundant parent parameter + its upstream distribution.
+                Distribution firstPrior = emitFirstPrior(value, dist);
                 if (firstPrior != null) produced.add(firstPrior);
                 dropVectorisedFirstValueParent(firstValue, context);
             }
         }
         // initialMean mode is deferred — current consumers (Skyline) use firstValue.
 
-        // Prior on consecutive differences: x[i] - x[i-1] ~ Normal(0, sd)
+        // Prior on consecutive differences: x[i] - x[i-1] ~ Normal(0, sd) i.i.d.
+        // Difference is a RealVector<Real>, so we wrap a scalar Normal in an IID.
         Difference diff = new Difference();
         diff.setInputValue("arg", value);
         diff.initAndValidate();
 
-        Normal normalDist = new Normal();
-        normalDist.setInputValue("mean", "0.0");
         Value<Double> sdValue = (Value<Double>) generator.getParams().get("sd");
-        BEASTInterface sdBEAST = context.getBEASTObject(sdValue);
-        normalDist.setInputValue("sigma", sdBEAST);
-        normalDist.initAndValidate();
+        Normal perElementNormal = new Normal();
+        perElementNormal.setInputValue("mean", new RealScalarParam<>(0.0, Real.INSTANCE));
+        perElementNormal.setInputValue("sigma",
+                (RealScalarParam<PositiveReal>) context.getAsRealScalar(sdValue));
+        perElementNormal.initAndValidate();
 
-        Prior diffPrior = new Prior();
-        diffPrior.setInputValue("x", diff);
-        diffPrior.setInputValue("distr", normalDist);
-        diffPrior.initAndValidate();
+        IID diffIid = new IID();
+        diffIid.setInputValue("param", diff);
+        diffIid.setInputValue("distr", perElementNormal);
+        diffIid.initAndValidate();
 
-        produced.add(diffPrior);
+        produced.add(diffIid);
 
-        // Return a single Prior if that's all we produced; otherwise wrap in a
-        // CompoundDistribution so both the Difference and First priors are picked
-        // up by the framework's prior-gathering pass (which only unpacks single
-        // Distribution registrations per generator key).
+        // Return the single distribution if that's all we produced; otherwise wrap
+        // the pair (First-prior + Difference-IID) in a CompoundDistribution so the
+        // framework's prior-gathering pass picks up both.
         if (produced.size() == 1) {
             return produced.get(0);
         }
@@ -101,44 +110,39 @@ public class GaussianRandomWalkToBEAST implements GeneratorToBEAST<GaussianRando
     }
 
     /**
-     * Extract mean/sigma from the firstValue's upstream LPhy Normal distribution
-     * (e.g. from {@code init ~ Normal(mean=0, sd=1, replicates=K)}) and emit a
-     * {@code Prior} on {@code First(chain)} with those parameters. Returns null
-     * if the upstream distribution isn't a supported type.
+     * Emit a spec {@link Normal} prior on {@link First}(chain) using the mean
+     * and sd of the firstValue's upstream LPhy Normal distribution (e.g. from
+     * {@code init ~ Normal(mean=0, sd=1, replicates=K)}). Returns null if the
+     * upstream distribution isn't a supported type. First is a RealScalar so
+     * the scalar Normal can take it directly as {@code param}.
      */
-    private Prior emitFirstPrior(BEASTInterface chain, Generator firstValueDist) {
+    private Distribution emitFirstPrior(BEASTInterface chain, Generator firstValueDist) {
         if (!(firstValueDist instanceof lphy.base.distribution.Normal lphyNormal)) {
             // Only Normal firstValues supported for now; other distributions would
             // need their own extraction logic.
             return null;
         }
 
-        Value<Number> meanV = lphyNormal.getMean();
-        Value<Number> sdV = lphyNormal.getSd();
-        double mean = meanV.value().doubleValue();
-        double sd = sdV.value().doubleValue();
+        double mean = lphyNormal.getMean().value().doubleValue();
+        double sd = lphyNormal.getSd().value().doubleValue();
 
         First first = new First();
         first.setInputValue("arg", chain);
         first.initAndValidate();
 
         Normal normal = new Normal();
-        normal.setInputValue("mean", Double.toString(mean));
-        normal.setInputValue("sigma", Double.toString(sd));
+        normal.setInputValue("mean", new RealScalarParam<>(mean, Real.INSTANCE));
+        normal.setInputValue("sigma", new RealScalarParam<>(sd, PositiveReal.INSTANCE));
+        normal.setInputValue("param", first);
         normal.initAndValidate();
-
-        Prior prior = new Prior();
-        prior.setInputValue("x", first);
-        prior.setInputValue("distr", normal);
-        prior.initAndValidate();
-        return prior;
+        return normal;
     }
 
     /**
      * Best-effort removal of the parent vectorised state node (e.g. {@code init}
-     * for {@code init ~ Normal(replicates=K)}) and its upstream prior. The GRW
-     * converter is called once per component and each call re-attempts the same
-     * lookup; subsequent calls are no-ops once the parent is removed.
+     * for {@code init ~ Normal(replicates=K)}) and any spec Normal/Distribution
+     * whose {@code param} points at it. The GRW converter is called once per
+     * component; subsequent calls are no-ops once the parent is removed.
      */
     private void dropVectorisedFirstValueParent(Value firstValue, BEASTContext context) {
         String canonicalId = firstValue.getCanonicalId();
@@ -154,14 +158,16 @@ public class GaussianRandomWalkToBEAST implements GeneratorToBEAST<GaussianRando
         BEASTInterface parent = context.getBEASTObject(parentId);
         if (parent == null) return;
 
-        // Find any Prior in the BEAST context whose x input points at the parent
-        // RealParameter and remove it. (Only one upstream prior is expected.)
+        // Find any TensorDistribution in the BEAST context whose `param` input
+        // points at the parent and remove it. Then drop the parent itself.
         for (BEASTInterface bi : new java.util.ArrayList<>(context.getElements().keySet())) {
-            if (bi instanceof Prior p) {
-                Object x = p.getInputValue("x");
-                if (x == parent) {
-                    context.removeBEASTObject(p);
+            try {
+                Object p = bi.getInputValue("param");
+                if (p == parent) {
+                    context.removeBEASTObject(bi);
                 }
+            } catch (Exception ignore) {
+                // Not every BEASTInterface has a "param" input; skip those.
             }
         }
         context.removeBEASTObject(parent);
