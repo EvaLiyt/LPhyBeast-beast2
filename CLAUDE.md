@@ -25,8 +25,8 @@ classpath to trigger SPI. BEAST 2 JARs are `system`-scope dependencies from `lib
 
 ## Build & Test
 
-The root `pom.xml` includes `../linguaPhylo` as a `<module>`, so both repos build together.
-The sibling LPhy checkout is expected at `../linguaPhylo/`.
+The root `pom.xml` includes `../linguaPhylo-beast2` as a `<module>`, so both repos build together.
+The sibling LPhy checkout is expected at `../linguaPhylo-beast2/`.
 Uses Maven wrapper (`./mvnw`) for reproducible builds. Plain `mvn` also works.
 
 ```bash
@@ -72,10 +72,10 @@ mappings from the local build instead of BEAST 2's package manager.
 ./mvnw -pl lphybeast exec:exec
 
 # Convert a script (paths relative to lphybeast/ working dir)
-./mvnw -pl lphybeast exec:exec -Dlphybeast.args="../../linguaPhylo/tutorials/RSV2.lphy"
+./mvnw -pl lphybeast exec:exec -Dlphybeast.args="../../linguaPhylo-beast2/tutorials/RSV2.lphy"
 
 # With flags
-./mvnw -pl lphybeast exec:exec -Dlphybeast.args="-r 5 ../../linguaPhylo/examples/coalescent/hkyCoalescent.lphy"
+./mvnw -pl lphybeast exec:exec -Dlphybeast.args="-r 5 ../../linguaPhylo-beast2/examples/coalescent/hkyCoalescent.lphy"
 ```
 
 ## Coding Conventions
@@ -125,5 +125,5 @@ Each submodule has its own `version.xml` at its root.
 
 ## Related Projects
 
-- [LPhy (linguaPhylo)](https://github.com/LinguaPhylo/linguaPhylo) — sibling checkout at `../linguaPhylo/`
+- [LPhy (linguaPhylo)](https://github.com/LinguaPhylo/linguaPhylo) — sibling checkout at `../linguaPhylo-beast2/`
 - [LPhyBeastTest](https://github.com/LinguaPhylo/LPhyBeastTest) — integration tests

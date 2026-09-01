@@ -10,7 +10,7 @@ if [[ $CURR_PATH == *LPhyBeast ]] || [[ $CURR_PATH == *LPhyBeast/ ]]; then
   # compulsory
   echo "git pull $(pwd)"
   git pull
-  NEXT_PATH="../linguaPhylo/"
+  NEXT_PATH="../linguaPhylo-beast2/"
   echo "git pull $NEXT_PATH"
   git -C $NEXT_PATH pull
   # optional

@@ -32,10 +32,10 @@
     </properties>
 
     <modules>
-        <module>../linguaPhylo</module>
+        <module>../linguaPhylo-beast2</module>
 <!--   Project 'io.github.linguaphylo:lphy:1.6.0-SNAPSHOT' is duplicated in the reactor   -->
-<!--        <module>../linguaPhylo/lphy</module>-->
-<!--        <module>../linguaPhylo/lphy-base</module>-->
+<!--        <module>../linguaPhylo-beast2/lphy</module>-->
+<!--        <module>../linguaPhylo-beast2/lphy-base</module>-->
         <module>lphybeast</module>
 <!--        <module>lblauncher</module>-->
         <module>lphybeast-flc</module>
